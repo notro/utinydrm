@@ -125,3 +125,26 @@ int tinydrm_resume(struct tinydrm_device *tdev)
 {
 	return 0;
 }
+
+/* tinydrm-fb.c */
+
+bool tinydrm_check_dirty(struct drm_framebuffer *fb,
+			 struct drm_clip_rect **clips, unsigned int *num_clips)
+{
+	struct tinydrm_device *tdev = drm_to_tinydrm(fb->dev);
+
+	if (!tdev->prepared)
+		return false;
+
+	/* fbdev can flush even when we're not interested */
+	if (tdev->pipe.plane.fb != fb)
+		return false;
+
+	/* Make sure to flush everything the first time */
+	if (!tdev->enabled) {
+		*clips = NULL;
+		*num_clips = 0;
+	}
+
+	return true;
+}

@@ -26,10 +26,14 @@ struct drm_framebuffer_funcs {
 		     unsigned num_clips);
 };
 
+struct drm_mode_object {
+	int id;
+};
+
 struct drm_framebuffer {
 	struct drm_device *dev;
 //	struct list_head head;
-//	struct drm_mode_object base;
+	struct drm_mode_object base;
 	const struct drm_framebuffer_funcs *funcs;
 	unsigned int pitches[4];
 	unsigned int offsets[4];
@@ -45,8 +49,37 @@ struct drm_framebuffer {
 //	struct list_head filp_head;
 };
 
+struct drm_gem_cma_object {
+//	struct drm_gem_object base;
+//	dma_addr_t paddr;
+//	struct sg_table *sgt;
+	void *vaddr;
+};
+
+struct drm_fb_cma {
+	struct drm_framebuffer    fb;
+	struct drm_gem_cma_object *obj[4];
+};
+
+static inline struct drm_fb_cma *to_fb_cma(struct drm_framebuffer *fb)
+{
+	return container_of(fb, struct drm_fb_cma, fb);
+}
+
+static inline struct drm_gem_cma_object *
+drm_fb_cma_get_gem_obj(struct drm_framebuffer *fb, unsigned int plane)
+{
+	struct drm_fb_cma *fb_cma = to_fb_cma(fb);
+
+	if (plane >= 4)
+		return NULL;
+
+	return fb_cma->obj[plane];
+}
+
 struct utinydrm_fb {
-	struct drm_framebuffer fb;
+	struct drm_fb_cma fb_cma;
+	struct drm_gem_cma_object cma_obj;
 	unsigned int id;
 	unsigned int handle;
 	int buf_fd;
@@ -86,7 +119,7 @@ struct drm_crtc {
 };
 
 struct drm_plane {
-
+	struct drm_framebuffer *fb;
 };
 
 struct drm_encoder {
@@ -417,8 +450,10 @@ int drm_printk(const char *level, unsigned int category, const char *s, ...)
 	drm_printk(KERN_DEBUG, DRM_UT_KMS, fmt, ##__VA_ARGS__)
 
 #define DRM_ERROR(fmt, ...)						\
-	drm_printk(KERN_ERR, DRM_UT_NONE, fmt,	##__VA_ARGS__)
+	drm_printk(KERN_ERR, DRM_UT_NONE, fmt, ##__VA_ARGS__)
 
+#define DRM_DEBUG(fmt, ...)						\
+	drm_printk(KERN_DEBUG, DRM_UT_NONE, fmt, ##__VA_ARGS__)
 
 
 static inline void drm_crtc_force_disable_all(struct drm_device *dev)

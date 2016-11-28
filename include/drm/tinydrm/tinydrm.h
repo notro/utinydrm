@@ -22,7 +22,7 @@ struct tinydrm_device {
 	struct drm_device drm;
 	struct drm_simple_display_pipe pipe;
 //	struct work_struct dirty_work;
-//	struct mutex dev_lock;
+	struct mutex dev_lock;
 	bool prepared;
 	bool enabled;
 //	struct drm_fbdev_cma *fbdev_cma;

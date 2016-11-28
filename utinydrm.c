@@ -18,6 +18,7 @@
 #include <linux/dma-buf.h>
 
 #include <drm/tinydrm/tinydrm.h>
+#include <drm/tinydrm/tinydrm-helpers.h>
 
 static inline struct drm_device *
 utinydrm_to_drm(struct utinydrm *udev)
@@ -27,10 +28,13 @@ utinydrm_to_drm(struct utinydrm *udev)
 
 static int utinydrm_pipe_enable(struct utinydrm *udev, struct utinydrm_event *ev)
 {
+	struct drm_device *drm = utinydrm_to_drm(udev);
+	struct tinydrm_device *tdev = drm_to_tinydrm(drm);
 	struct timespec ts;
 
 	clock_gettime(CLOCK_MONOTONIC, &ts);
 	printf("[%ld.%09ld] %u: Pipe enable\n", ts.tv_sec, ts.tv_nsec, ev->type);
+	tdev->prepared = true;
 
 	return 0;
 }
@@ -48,7 +52,6 @@ static int utinydrm_pipe_disable(struct utinydrm *udev, struct utinydrm_event *e
 static int utinydrm_fb_create(struct utinydrm *udev, struct utinydrm_event_fb_create *ev)
 {
 	struct drm_device *drm = utinydrm_to_drm(udev);
-	//struct tinydrm_device *tdev = drm_to_tinydrm(drm);
 	struct drm_mode_fb_cmd2 *mfb = &ev->fb;
 	struct timespec ts;
 
@@ -67,7 +70,7 @@ static int utinydrm_fb_create(struct utinydrm *udev, struct utinydrm_event_fb_cr
 	if (!ufb)
 		return -ENOMEM;
 
-	fb = &ufb->fb;
+	fb = &ufb->fb_cma.fb;
 	ufb->id = info.fb_id;
 
 	ret = ioctl(udev->control_fd, DRM_IOCTL_MODE_GETFB, &info);
@@ -106,7 +109,10 @@ static int utinydrm_fb_create(struct utinydrm *udev, struct utinydrm_event_fb_cr
 	printf("[FB:%u]: ufb=%p, ufb->next=%p\n", ufb->id, ufb, ufb->next);
 
 	printf("Address: %p\n", ufb->map);
+	ufb->fb_cma.obj[0] = &ufb->cma_obj;
+	ufb->fb_cma.obj[0]->vaddr = ufb->map;
 
+	fb->base.id = info.fb_id;
 	fb->dev = drm;
 	fb->funcs = udev->fb_funcs;
 	fb->pitches[0] = info.pitch;
@@ -217,7 +223,10 @@ static int utinydrm_fb_dirty(struct utinydrm *udev, struct utinydrm_event_fb_dir
 	struct drm_clip_rect *clip;
 	struct drm_mode_fb_dirty_cmd *dirty = &ev->fb_dirty_cmd;
 	struct dma_buf_sync sync_args;
+	struct drm_framebuffer *fb;
 	int i, ret;
+	struct drm_device *drm = utinydrm_to_drm(udev);
+	struct tinydrm_device *tdev = drm_to_tinydrm(drm);
 
 	clock_gettime(CLOCK_MONOTONIC, &ts);
 	printf("[%ld.%09ld] %u: [FB:%u] dirty: num_clips=%u\n", ts.tv_sec, ts.tv_nsec, ev->base.type, dirty->fb_id, dirty->num_clips);
@@ -243,6 +252,14 @@ static int utinydrm_fb_dirty(struct utinydrm *udev, struct utinydrm_event_fb_dir
 		perror("Failed to DMA_BUF_SYNC_START");
 
 	hexdump("utinydrm_fb_dirty", ufb->map, 320 * 2);
+
+	fb = &ufb->fb_cma.fb;
+
+	/* FIXME: drm_simple_display_pipe_funcs.update() must set this */
+	tdev->pipe.plane.fb = fb;
+
+	if (fb && fb->funcs && fb->funcs->dirty)
+		fb->funcs->dirty(fb, NULL, dirty->flags, dirty->color, ev->clips, dirty->num_clips);
 
 	sync_args.flags = DMA_BUF_SYNC_END | DMA_BUF_SYNC_READ;
 	ret = ioctl(ufb->buf_fd, DMA_BUF_IOCTL_SYNC, &sync_args);
@@ -285,12 +302,57 @@ static int utinydrm_event(struct utinydrm *udev, struct utinydrm_event *ev)
 	return ret;
 }
 
+/*********************************************************************************************************************************/
+
 static const struct drm_display_mode utinydrm_mode = {
 	TINYDRM_MODE(320, 240, 58, 43),
 };
 
+static int u_fb_dirty(struct drm_framebuffer *fb,
+			     struct drm_file *file_priv,
+			     unsigned int flags, unsigned int color,
+			     struct drm_clip_rect *clips,
+			     unsigned int num_clips)
+{
+	struct drm_gem_cma_object *cma_obj = drm_fb_cma_get_gem_obj(fb, 0);
+	struct tinydrm_device *tdev = drm_to_tinydrm(fb->dev);
+	struct drm_clip_rect clip;
+	int ret = 0;
+
+printf("%s(fb=%p, clips=%p, num_clips=%u)\n", __func__, fb, clips, num_clips);
+	mutex_lock(&tdev->dev_lock);
+
+	if (!tinydrm_check_dirty(fb, &clips, &num_clips))
+		goto out_unlock;
+
+	tinydrm_merge_clips(&clip, clips, num_clips, flags,
+			    fb->width, fb->height);
+	clip.x1 = 0;
+	clip.x2 = fb->width;
+
+	DRM_DEBUG("Flushing [FB:%d] x1=%u, x2=%u, y1=%u, y2=%u\n", fb->base.id,
+		  clip.x1, clip.x2, clip.y1, clip.y2);
+
+	printf("Address: %p\n", cma_obj->vaddr);
+
+	tinydrm_debugfs_dirty_begin(tdev, fb, &clip);
+
+	tinydrm_debugfs_dirty_end(tdev, 0, 16);
+
+	if (ret) {
+		dev_err_once(fb->dev->dev, "Failed to update display %d\n",
+			     ret);
+		goto out_unlock;
+	}
+
+out_unlock:
+	mutex_unlock(&tdev->dev_lock);
+
+	return ret;
+}
+
 static const struct drm_framebuffer_funcs u_fb_funcs = {
-	.dirty = NULL,
+	.dirty = u_fb_dirty,
 };
 
 static struct drm_driver udrv = {
