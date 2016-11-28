@@ -1,14 +1,3 @@
-/*
- * uledmon.c
- *
- * This program creates a new userspace LED class device and monitors it. A
- * timestamp and brightness value is printed each time the brightness changes.
- *
- * Usage: uledmon <device-name>
- *
- * <device-name> is the name of the LED class device to be created. Pressing
- * CTRL+C will exit.
- */
 
 #include <fcntl.h>
 #include <poll.h>
@@ -28,65 +17,13 @@
 
 #include <linux/dma-buf.h>
 
-//#include <drm/utinydrm.h>
-#include "../tinydrm/include/uapi/drm/utinydrm.h"
+#include <drm/tinydrm/tinydrm.h>
 
-
-struct utinydrm_fb {
-	unsigned int id;
-	unsigned int handle;
-	int buf_fd;
-	off_t map_size;
-	void *map;
-	struct utinydrm_fb *next;
-};
-
-struct utinydrm {
-	int fd;
-	int control_fd;
-	struct utinydrm_fb *fbs;
-};
-
-struct drm_display_mode {
-//        struct drm_mode_object base;
-        char name[DRM_DISPLAY_MODE_LEN];
-//        enum drm_mode_status status;
-        unsigned int type;
-        int clock;              /* in kHz */
-        int hdisplay;
-        int hsync_start;
-        int hsync_end;
-        int htotal;
-        int hskew;
-        int vdisplay;
-        int vsync_start;
-        int vsync_end;
-        int vtotal;
-        int vscan;
-        unsigned int flags;
-        int width_mm;
-        int height_mm;
-        int crtc_clock;
-        int crtc_hdisplay;
-        int crtc_hblank_start;
-        int crtc_hblank_end;
-        int crtc_hsync_start;
-        int crtc_hsync_end;
-        int crtc_htotal;
-        int crtc_hskew;
-        int crtc_vdisplay;
-        int crtc_vblank_start;
-        int crtc_vblank_end;
-        int crtc_vsync_start;
-        int crtc_vsync_end;
-        int crtc_vtotal;
-        int *private;
-        int private_flags;
-        int vrefresh;
-        int hsync;
-//        enum hdmi_picture_aspect picture_aspect_ratio;
-};
-
+static inline struct drm_device *
+utinydrm_to_drm(struct utinydrm *udev)
+{
+	return container_of(udev, struct drm_device, udev);
+}
 
 static int utinydrm_pipe_enable(struct utinydrm *udev, struct utinydrm_event *ev)
 {
@@ -110,6 +47,8 @@ static int utinydrm_pipe_disable(struct utinydrm *udev, struct utinydrm_event *e
 
 static int utinydrm_fb_create(struct utinydrm *udev, struct utinydrm_event_fb_create *ev)
 {
+	struct drm_device *drm = utinydrm_to_drm(udev);
+	//struct tinydrm_device *tdev = drm_to_tinydrm(drm);
 	struct drm_mode_fb_cmd2 *mfb = &ev->fb;
 	struct timespec ts;
 
@@ -119,6 +58,7 @@ static int utinydrm_fb_create(struct utinydrm *udev, struct utinydrm_event_fb_cr
 	int ret;
 	struct drm_prime_handle prime;
 	struct utinydrm_fb *ufb;
+	struct drm_framebuffer *fb;
 
 	clock_gettime(CLOCK_MONOTONIC, &ts);
 	printf("[%ld.%09ld] %u: [FB:%u] create: %ux%u, handles[0]=%u\n", ts.tv_sec, ts.tv_nsec, ev->base.type, mfb->fb_id, mfb->width, mfb->height, mfb->handles[0]);
@@ -127,6 +67,7 @@ static int utinydrm_fb_create(struct utinydrm *udev, struct utinydrm_event_fb_cr
 	if (!ufb)
 		return -ENOMEM;
 
+	fb = &ufb->fb;
 	ufb->id = info.fb_id;
 
 	ret = ioctl(udev->control_fd, DRM_IOCTL_MODE_GETFB, &info);
@@ -165,6 +106,15 @@ static int utinydrm_fb_create(struct utinydrm *udev, struct utinydrm_event_fb_cr
 	printf("[FB:%u]: ufb=%p, ufb->next=%p\n", ufb->id, ufb, ufb->next);
 
 	printf("Address: %p\n", ufb->map);
+
+	fb->dev = drm;
+	fb->funcs = udev->fb_funcs;
+	fb->pitches[0] = info.pitch;
+	fb->width = info.width;
+	fb->height = info.height;
+	//fb->bpp = info.bpp;
+	//fb->depth = info.depth
+	fb->pixel_format = drm_mode_legacy_fb_format(info.bpp, info.depth);
 
 	return 0;
 
@@ -335,59 +285,34 @@ static int utinydrm_event(struct utinydrm *udev, struct utinydrm_event *ev)
 	return ret;
 }
 
-static void drm_mode_convert_to_umode(struct drm_mode_modeinfo *out,
-                                      const struct drm_display_mode *in)
-{
-        out->clock = in->clock;
-        out->hdisplay = in->hdisplay;
-        out->hsync_start = in->hsync_start;
-        out->hsync_end = in->hsync_end;
-        out->htotal = in->htotal;
-        out->hskew = in->hskew;
-        out->vdisplay = in->vdisplay;
-        out->vsync_start = in->vsync_start;
-        out->vsync_end = in->vsync_end;
-        out->vtotal = in->vtotal;
-        out->vscan = in->vscan;
-        out->vrefresh = in->vrefresh;
-        out->flags = in->flags;
-        out->type = in->type;
-        strncpy(out->name, in->name, DRM_DISPLAY_MODE_LEN);
-        out->name[DRM_DISPLAY_MODE_LEN-1] = 0;
-}
-
-#define TINYDRM_MODE(hd, vd, hd_mm, vd_mm) \
-	.hdisplay = (hd), \
-	.hsync_start = (hd), \
-	.hsync_end = (hd), \
-	.htotal = (hd), \
-	.vdisplay = (vd), \
-	.vsync_start = (vd), \
-	.vsync_end = (vd), \
-	.vtotal = (vd), \
-	.width_mm = (hd_mm), \
-	.height_mm = (vd_mm), \
-	.type = DRM_MODE_TYPE_DRIVER, \
-	.clock = 1 /* pass validation */
-
 static const struct drm_display_mode utinydrm_mode = {
 	TINYDRM_MODE(320, 240, 58, 43),
 };
 
+static const struct drm_framebuffer_funcs u_fb_funcs = {
+	.dirty = NULL,
+};
+
+static struct drm_driver udrv = {
+	.name = "mi0283qt",
+};
+
 int main(int argc, char const *argv[])
 {
-	struct utinydrm udev;
-	struct utinydrm_dev_create udev_create = {
-		.name = "mi0283qt",
-	};
+	struct tinydrm_device tdev_stack;
+	struct tinydrm_device *tdev = &tdev_stack;
+	struct device dev;
+	struct utinydrm *udev;
 	struct utinydrm_event *ev;
 	int ret;
 	struct pollfd pfd;
-	char ctrl_fname[PATH_MAX];
 
 	memset(&udev, 0, sizeof(udev));
+	memset(tdev, 0, sizeof(*tdev));
 
-	drm_mode_convert_to_umode(&udev_create.mode, &utinydrm_mode);
+	udev = &tdev->drm.udev;
+
+	drm_mode_convert_to_umode(&udev->mode, &utinydrm_mode);
 
 	ev = malloc(1024);
 	if (!ev) {
@@ -395,59 +320,38 @@ int main(int argc, char const *argv[])
 		return 1;
 	}
 
-	udev.fd = open("/dev/utinydrm", O_RDWR);
-	if (udev.fd == -1) {
-		perror("Failed to open /dev/utinydrm");
+	devm_tinydrm_init(&dev, tdev, &u_fb_funcs, &udrv);
+	ret = devm_tinydrm_register(tdev);
+	if (ret)
 		return 1;
-	}
 
-	ret = ioctl(udev.fd, UTINYDRM_DEV_CREATE, &udev_create);
-	if (ret == -1) {
-		perror("Failed to create device");
-		close(udev.fd);
-		return 1;
-	}
-
-	snprintf(ctrl_fname, sizeof(ctrl_fname), "/dev/dri/controlD%d", udev_create.index + 64);
-	printf("DRM index: %d, ctrl_fname=%s\n", udev_create.index, ctrl_fname);
-
-	udev.control_fd = open(ctrl_fname, O_RDWR);
-	if (udev.control_fd == -1) {
-		perror("Failed to open /dev/dri/...");
-		close(udev.fd);
-		return 1;
-	}
-
-	pfd.fd = udev.fd;
+	pfd.fd = udev->fd;
 	pfd.events = POLLIN;
 	pfd.revents = 0;
 
 	while (!(pfd.revents & (POLLERR | POLLHUP | POLLNVAL))) {
 		int event_ret;
 
-		ret = read(udev.fd, ev, 1024);
+		ret = read(udev->fd, ev, 1024);
 		if (ret == -1) {
 			perror("Failed to read from /dev/utinydrm");
-			close(udev.control_fd);
-			close(udev.fd);
+			tinydrm_unregister(tdev);
 			return 1;
 		}
 
-		event_ret = utinydrm_event(&udev, ev);
+		event_ret = utinydrm_event(udev, ev);
 
-		ret = write(udev.fd, &event_ret, sizeof(int));
+		ret = write(udev->fd, &event_ret, sizeof(int));
 		if (ret == -1) {
 			perror("Failed to write to /dev/utinydrm");
-			close(udev.control_fd);
-			close(udev.fd);
+			tinydrm_unregister(tdev);
 			return 1;
 		}
 
 		poll(&pfd, 1, -1);
 	}
 
-	close(udev.control_fd);
-	close(udev.fd);
+	tinydrm_unregister(tdev);
 
 	return 0;
 }

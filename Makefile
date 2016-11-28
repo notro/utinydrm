@@ -17,7 +17,7 @@ DEPFLAGS = -MT $@ -MMD -MP -MF $(DEPDIR)/$*.Td
 COMPILE.c = $(CC) $(DEPFLAGS) $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -c
 POSTCOMPILE = mv -f $(DEPDIR)/$*.Td $(DEPDIR)/$*.d
 
-OBJS = utinydrm.o
+OBJS = utinydrm.o tinydrm-core.o
 MAIN = utinydrm
 
 all: $(MAIN)
