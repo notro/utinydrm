@@ -20,6 +20,8 @@
 #include <drm/tinydrm/tinydrm.h>
 #include <drm/tinydrm/tinydrm-helpers.h>
 
+int drm_debug = 0xff;
+
 static inline struct drm_device *
 utinydrm_to_drm(struct utinydrm *udev)
 {
@@ -52,7 +54,6 @@ static int utinydrm_fb_create(struct utinydrm *udev, struct utinydrm_event_fb_cr
 {
 	struct drm_device *drm = utinydrm_to_drm(udev);
 	struct drm_mode_fb_cmd2 *mfb = &ev->fb;
-	struct timespec ts;
 
 	struct drm_mode_fb_cmd info = {
 		.fb_id = mfb->fb_id,
@@ -62,8 +63,7 @@ static int utinydrm_fb_create(struct utinydrm *udev, struct utinydrm_event_fb_cr
 	struct utinydrm_fb *ufb;
 	struct drm_framebuffer *fb;
 
-	clock_gettime(CLOCK_MONOTONIC, &ts);
-	printf("[%ld.%09ld] %u: [FB:%u] create: %ux%u, handles[0]=%u\n", ts.tv_sec, ts.tv_nsec, ev->base.type, mfb->fb_id, mfb->width, mfb->height, mfb->handles[0]);
+	DRM_DEBUG("[FB:%u] create: %ux%u, handles[0]=%u\n", mfb->fb_id, mfb->width, mfb->height, mfb->handles[0]);
 
 	ufb = calloc(1, sizeof(*ufb));
 	if (!ufb)
@@ -79,7 +79,7 @@ static int utinydrm_fb_create(struct utinydrm *udev, struct utinydrm_event_fb_cr
 		goto error;
 	}
 
-	printf("[%ld.%09ld] [FB:%u] create: %ux%u, handle=%u\n", ts.tv_sec, ts.tv_nsec, info.fb_id, info.width, info.height, info.handle);
+	DRM_DEBUG("[FB:%u] create: %ux%u, handle=%u\n", info.fb_id, info.width, info.height, info.handle);
 	ufb->handle = info.handle;
 
 	memset(&prime, 0, sizeof(struct drm_prime_handle));
@@ -90,7 +90,7 @@ static int utinydrm_fb_create(struct utinydrm *udev, struct utinydrm_event_fb_cr
 		ret = -errno;
 		goto error;
 	}
-	printf("Prime Handle: %x to FD: %d\n", prime.handle, prime.fd);
+	DRM_DEBUG("Prime Handle: %x to FD: %d\n", prime.handle, prime.fd);
 	ufb->buf_fd = prime.fd;
 
 	ufb->map_size = info.height * info.pitch;
@@ -105,9 +105,9 @@ static int utinydrm_fb_create(struct utinydrm *udev, struct utinydrm_event_fb_cr
 
 	ufb->next = udev->fbs;
 	udev->fbs = ufb;
-	printf("[FB:%u]: ufb=%p, ufb->next=%p\n", ufb->id, ufb, ufb->next);
+	//printf("[FB:%u]: ufb=%p, ufb->next=%p\n", ufb->id, ufb, ufb->next);
 
-	printf("Address: %p\n", ufb->map);
+	DRM_DEBUG("Address: %p\n", ufb->map);
 	ufb->fb_cma.obj[0] = &ufb->cma_obj;
 	ufb->fb_cma.obj[0]->vaddr = ufb->map;
 
@@ -131,15 +131,13 @@ error:
 
 static int utinydrm_fb_destroy(struct utinydrm *udev, struct utinydrm_event_fb_destroy *ev)
 {
-	struct timespec ts;
 	struct utinydrm_fb **prev, **curr, *ufb = NULL;
 	int ret;
 
-	clock_gettime(CLOCK_MONOTONIC, &ts);
-	printf("[%ld.%09ld] %u: [FB:%u] destroy\n", ts.tv_sec, ts.tv_nsec, ev->base.type, ev->fb_id);
+	DRM_DEBUG("[FB:%u] destroy\n", ev->fb_id);
 
 	for (prev = &udev->fbs, curr = prev; *curr != NULL; prev = curr, curr = &(*curr)->next) {
-		printf("(*curr)->id=%u, *curr=%p, *curr->next=%p\n", (*curr)->id, *curr, (*curr)->next);
+		//printf("(*curr)->id=%u, *curr=%p, *curr->next=%p\n", (*curr)->id, *curr, (*curr)->next);
 		if ((*curr)->id == ev->fb_id) {
 			ufb = *curr;
 			*prev = (*curr)->next;
@@ -296,11 +294,9 @@ static int u_fb_dirty(struct drm_framebuffer *fb,
 	struct drm_gem_cma_object *cma_obj = drm_fb_cma_get_gem_obj(fb, 0);
 	struct tinydrm_device *tdev = drm_to_tinydrm(fb->dev);
 	struct drm_clip_rect clip;
-	struct timespec ts;
 	int i, ret = 0;
 
-	clock_gettime(CLOCK_MONOTONIC, &ts);
-	printf("[%ld.%09ld] %s: [FB:%u] dirty: num_clips=%u\n", ts.tv_sec, ts.tv_nsec, __func__, fb->base.id, num_clips);
+	DRM_DEBUG("[FB:%u] dirty: num_clips=%u\n", fb->base.id, num_clips);
 
 	for (i = 0; i < num_clips; i++)
 		printf("    clips[%d]: x1=%u, x2=%u, y1=%u, y2=%u\n", i,
@@ -319,11 +315,11 @@ static int u_fb_dirty(struct drm_framebuffer *fb,
 	DRM_DEBUG("Flushing [FB:%d] x1=%u, x2=%u, y1=%u, y2=%u\n", fb->base.id,
 		  clip.x1, clip.x2, clip.y1, clip.y2);
 
-	printf("Address: %p\n", cma_obj->vaddr);
+	DRM_DEBUG("Address: %p\n", cma_obj->vaddr);
 
 	tinydrm_debugfs_dirty_begin(tdev, fb, &clip);
 
-	hexdump("utinydrm_fb_dirty", cma_obj->vaddr, 320 * 2);
+//	hexdump("utinydrm_fb_dirty", cma_obj->vaddr, 320 * 2);
 
 	tinydrm_debugfs_dirty_end(tdev, 0, 16);
 
@@ -347,20 +343,16 @@ static void u_pipe_enable(struct drm_simple_display_pipe *pipe,
 			  struct drm_crtc_state *crtc_state)
 {
 	struct tinydrm_device *tdev = pipe_to_tinydrm(pipe);
-	struct timespec ts;
 
-	clock_gettime(CLOCK_MONOTONIC, &ts);
-	printf("[%ld.%09ld] %s: Pipe enable\n", ts.tv_sec, ts.tv_nsec, __func__);
+	DRM_DEBUG("Pipe enable\n");
 	tdev->prepared = true;
 }
 
 static void u_pipe_disable(struct drm_simple_display_pipe *pipe)
 {
 	struct tinydrm_device *tdev = pipe_to_tinydrm(pipe);
-	struct timespec ts;
 
-	clock_gettime(CLOCK_MONOTONIC, &ts);
-	printf("[%ld.%09ld] %s: Pipe disable\n", ts.tv_sec, ts.tv_nsec, __func__);
+	DRM_DEBUG("Pipe disable\n");
 	tdev->prepared = false;
 }
 

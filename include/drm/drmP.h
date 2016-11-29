@@ -10,6 +10,8 @@
 // off_t
 #include <sys/types.h>
 
+extern int drm_debug;
+
 struct drm_framebuffer;
 struct drm_file;
 
@@ -422,11 +424,6 @@ struct drm_driver {
 
 
 
-static inline
-int drm_printk(const char *level, unsigned int category, const char *s, ...)
-{
-        return 0;
-}
 
 #define KERN_EMERG      ""    /* system is unusable */
 #define KERN_ALERT      "1"    /* action must be taken immediately */
@@ -444,6 +441,15 @@ int drm_printk(const char *level, unsigned int category, const char *s, ...)
 #define DRM_UT_PRIME		0x08
 #define DRM_UT_ATOMIC		0x10
 #define DRM_UT_VBL		0x20
+
+#define drm_printk(level, category, fmt, ...)				\
+({									\
+	struct timespec __ts;						\
+									\
+	clock_gettime(CLOCK_MONOTONIC, &__ts);				\
+	if (!(category != DRM_UT_NONE && !(drm_debug & category)))	\
+		printf("[%ld.%09ld] [utinydrm:%s] " fmt, __ts.tv_sec, __ts.tv_nsec, __func__, ##__VA_ARGS__);	\
+})
 
 #define DRM_DEBUG_KMS(fmt, ...)					\
 	drm_printk(KERN_DEBUG, DRM_UT_KMS, fmt, ##__VA_ARGS__)
