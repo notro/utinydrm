@@ -144,3 +144,58 @@ bool tinydrm_check_dirty(struct drm_framebuffer *fb,
 
 	return true;
 }
+
+/* tinydrm-pipe.c */
+
+static int tinydrm_rotate_mode(struct drm_display_mode *mode,
+			       unsigned int rotation)
+{
+	if (rotation == 0 || rotation == 180) {
+		return 0;
+	} else if (rotation == 90 || rotation == 270) {
+		swap(mode->hdisplay, mode->vdisplay);
+		swap(mode->hsync_start, mode->vsync_start);
+		swap(mode->hsync_end, mode->vsync_end);
+		swap(mode->htotal, mode->vtotal);
+		swap(mode->width_mm, mode->height_mm);
+		return 0;
+	} else {
+		return -EINVAL;
+	}
+}
+
+int
+tinydrm_display_pipe_init(struct tinydrm_device *tdev,
+			  const struct drm_simple_display_pipe_funcs *funcs,
+			  int connector_type,
+			  const uint32_t *formats,
+			  unsigned int format_count,
+			  const struct drm_display_mode *mode,
+			  unsigned int rotation)
+{
+	struct drm_device *drm = &tdev->drm;
+	struct utinydrm *udev = &drm->udev;
+	struct drm_display_mode mode_copy_stack;
+	struct drm_display_mode *mode_copy = &mode_copy_stack;
+	int ret;
+
+	*mode_copy = *mode;
+	ret = tinydrm_rotate_mode(mode_copy, rotation);
+	if (ret) {
+		DRM_ERROR("Illegal rotation value %u\n", rotation);
+		return -EINVAL;
+	}
+
+	drm_mode_convert_to_umode(&udev->mode, mode_copy);
+
+	//drm->mode_config.min_width = mode_copy->hdisplay;
+	//drm->mode_config.max_width = mode_copy->hdisplay;
+	//drm->mode_config.min_height = mode_copy->vdisplay;
+	//drm->mode_config.max_height = mode_copy->vdisplay;
+
+	tdev->pipe.funcs = funcs;
+	//formats
+	//format_count
+
+	return 0;
+}

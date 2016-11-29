@@ -30,21 +30,20 @@ static int utinydrm_pipe_enable(struct utinydrm *udev, struct utinydrm_event *ev
 {
 	struct drm_device *drm = utinydrm_to_drm(udev);
 	struct tinydrm_device *tdev = drm_to_tinydrm(drm);
-	struct timespec ts;
 
-	clock_gettime(CLOCK_MONOTONIC, &ts);
-	printf("[%ld.%09ld] %u: Pipe enable\n", ts.tv_sec, ts.tv_nsec, ev->type);
-	tdev->prepared = true;
+	if (tdev->pipe.funcs && tdev->pipe.funcs->enable)
+		tdev->pipe.funcs->enable(&tdev->pipe, NULL);
 
 	return 0;
 }
 
 static int utinydrm_pipe_disable(struct utinydrm *udev, struct utinydrm_event *ev)
 {
-	struct timespec ts;
+	struct drm_device *drm = utinydrm_to_drm(udev);
+	struct tinydrm_device *tdev = drm_to_tinydrm(drm);
 
-	clock_gettime(CLOCK_MONOTONIC, &ts);
-	printf("[%ld.%09ld] %u: Pipe disable\n", ts.tv_sec, ts.tv_nsec, ev->type);
+	if (tdev->pipe.funcs && tdev->pipe.funcs->disable)
+		tdev->pipe.funcs->disable(&tdev->pipe);
 
 	return 0;
 }
@@ -218,23 +217,11 @@ static void hexdump(char *desc, void *addr, int len) {
 
 static int utinydrm_fb_dirty(struct utinydrm *udev, struct utinydrm_event_fb_dirty *ev)
 {
-	struct utinydrm_fb *ufb;
-	struct timespec ts;
-	struct drm_clip_rect *clip;
 	struct drm_mode_fb_dirty_cmd *dirty = &ev->fb_dirty_cmd;
 	struct dma_buf_sync sync_args;
 	struct drm_framebuffer *fb;
-	int i, ret;
-
-	clock_gettime(CLOCK_MONOTONIC, &ts);
-	printf("[%ld.%09ld] %u: [FB:%u] dirty: num_clips=%u\n", ts.tv_sec, ts.tv_nsec, ev->base.type, dirty->fb_id, dirty->num_clips);
-
-	for (i = 0; i < dirty->num_clips; i++) {
-		clip = &ev->clips[i];
-
-		printf("Flushing [FB:%d] x1=%u, x2=%u, y1=%u, y2=%u\n", dirty->fb_id,
-			clip->x1, clip->x2, clip->y1, clip->y2);
-	}
+	struct utinydrm_fb *ufb;
+	int ret;
 
 	for (ufb = udev->fbs; ufb != NULL; ufb = ufb->next) {
 		if (ufb->id == ev->fb_dirty_cmd.fb_id)
@@ -248,8 +235,6 @@ static int utinydrm_fb_dirty(struct utinydrm *udev, struct utinydrm_event_fb_dir
 	ret = ioctl(ufb->buf_fd, DMA_BUF_IOCTL_SYNC, &sync_args);
 	if (ret == -1)
 		perror("Failed to DMA_BUF_SYNC_START");
-
-	hexdump("utinydrm_fb_dirty", ufb->map, 320 * 2);
 
 	fb = &ufb->fb_cma.fb;
 	if (fb && fb->funcs && fb->funcs->dirty)
@@ -311,9 +296,16 @@ static int u_fb_dirty(struct drm_framebuffer *fb,
 	struct drm_gem_cma_object *cma_obj = drm_fb_cma_get_gem_obj(fb, 0);
 	struct tinydrm_device *tdev = drm_to_tinydrm(fb->dev);
 	struct drm_clip_rect clip;
-	int ret = 0;
+	struct timespec ts;
+	int i, ret = 0;
 
-printf("%s(fb=%p, clips=%p, num_clips=%u)\n", __func__, fb, clips, num_clips);
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	printf("[%ld.%09ld] %s: [FB:%u] dirty: num_clips=%u\n", ts.tv_sec, ts.tv_nsec, __func__, fb->base.id, num_clips);
+
+	for (i = 0; i < num_clips; i++)
+		printf("    clips[%d]: x1=%u, x2=%u, y1=%u, y2=%u\n", i,
+			clips[i].x1, clips[i].x2, clips[i].y1, clips[i].y2);
+
 	mutex_lock(&tdev->dev_lock);
 
 	if (!tinydrm_check_dirty(fb, &clips, &num_clips))
@@ -331,6 +323,8 @@ printf("%s(fb=%p, clips=%p, num_clips=%u)\n", __func__, fb, clips, num_clips);
 
 	tinydrm_debugfs_dirty_begin(tdev, fb, &clip);
 
+	hexdump("utinydrm_fb_dirty", cma_obj->vaddr, 320 * 2);
+
 	tinydrm_debugfs_dirty_end(tdev, 0, 16);
 
 	if (ret) {
@@ -347,6 +341,32 @@ out_unlock:
 
 static const struct drm_framebuffer_funcs u_fb_funcs = {
 	.dirty = u_fb_dirty,
+};
+
+static void u_pipe_enable(struct drm_simple_display_pipe *pipe,
+			  struct drm_crtc_state *crtc_state)
+{
+	struct tinydrm_device *tdev = pipe_to_tinydrm(pipe);
+	struct timespec ts;
+
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	printf("[%ld.%09ld] %s: Pipe enable\n", ts.tv_sec, ts.tv_nsec, __func__);
+	tdev->prepared = true;
+}
+
+static void u_pipe_disable(struct drm_simple_display_pipe *pipe)
+{
+	struct tinydrm_device *tdev = pipe_to_tinydrm(pipe);
+	struct timespec ts;
+
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	printf("[%ld.%09ld] %s: Pipe disable\n", ts.tv_sec, ts.tv_nsec, __func__);
+	tdev->prepared = false;
+}
+
+static const struct drm_simple_display_pipe_funcs u_pipe_funcs = {
+	.enable = u_pipe_enable,
+	.disable = u_pipe_disable,
 };
 
 static struct drm_driver udrv = {
@@ -368,8 +388,6 @@ int main(int argc, char const *argv[])
 
 	udev = &tdev->drm.udev;
 
-	drm_mode_convert_to_umode(&udev->mode, &utinydrm_mode);
-
 	ev = malloc(1024);
 	if (!ev) {
 		perror("Failed to allocate memory");
@@ -377,6 +395,11 @@ int main(int argc, char const *argv[])
 	}
 
 	devm_tinydrm_init(&dev, tdev, &u_fb_funcs, &udrv);
+
+	ret = tinydrm_display_pipe_init(tdev, &u_pipe_funcs, 0, NULL, 0, &utinydrm_mode, 0);
+	if (ret)
+		return 1;
+
 	ret = devm_tinydrm_register(tdev);
 	if (ret)
 		return 1;
