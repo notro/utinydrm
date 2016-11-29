@@ -1,8 +1,7 @@
 
 
 XFLAGS    = -Wall -Wshadow -Wstrict-prototypes -Wmissing-prototypes \
-            -DDEBUG -Wredundant-decls
-
+            -DDEBUG -DVERBOSE_DEBUG -Wredundant-decls
 
 INCDIRS   = -Iinclude -I/home/pi/work/tinydrm/usr/include
 
@@ -17,7 +16,7 @@ DEPFLAGS = -MT $@ -MMD -MP -MF $(DEPDIR)/$*.Td
 COMPILE.c = $(CC) $(DEPFLAGS) $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -c
 POSTCOMPILE = mv -f $(DEPDIR)/$*.Td $(DEPDIR)/$*.d
 
-OBJS = utinydrm.o tinydrm-core.o tinydrm-helpers.o
+OBJS = utinydrm.o tinydrm-core.o tinydrm-helpers.o tinydrm-regmap.o
 MAIN = utinydrm
 
 all: $(MAIN)

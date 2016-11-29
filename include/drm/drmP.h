@@ -10,6 +10,15 @@
 // off_t
 #include <sys/types.h>
 
+// struct timespec
+#include <time.h>
+
+// printf
+#include <stdio.h>
+
+// isascii() && isprint()
+#include <ctype.h>
+
 extern int drm_debug;
 
 struct drm_framebuffer;
@@ -457,8 +466,14 @@ struct drm_driver {
 #define DRM_ERROR(fmt, ...)						\
 	drm_printk(KERN_ERR, DRM_UT_NONE, fmt, ##__VA_ARGS__)
 
+#define DRM_INFO(fmt, ...)						\
+	drm_printk(KERN_INFO, DRM_UT_NONE, fmt, ##__VA_ARGS__)
+
 #define DRM_DEBUG(fmt, ...)						\
 	drm_printk(KERN_DEBUG, DRM_UT_NONE, fmt, ##__VA_ARGS__)
+
+#define DRM_DEBUG_DRIVER(fmt, ...)					\
+	drm_printk(KERN_DEBUG, DRM_UT_DRIVER, fmt, ##__VA_ARGS__)
 
 
 static inline void drm_crtc_force_disable_all(struct drm_device *dev)
@@ -524,5 +539,25 @@ static inline uint32_t drm_mode_legacy_fb_format(uint32_t bpp, uint32_t depth)
         return fmt;
 }
 
+static inline char printable_char(int c)
+{
+        return isascii(c) && isprint(c) ? c : '?';
+}
+
+static inline const char *drm_get_format_name(uint32_t format)
+{
+        static char buf[32];
+
+        snprintf(buf, sizeof(buf),
+                 "%c%c%c%c %s-endian (0x%08x)",
+                 printable_char(format & 0xff),
+                 printable_char((format >> 8) & 0xff),
+                 printable_char((format >> 16) & 0xff),
+                 printable_char((format >> 24) & 0x7f),
+                 format & DRM_FORMAT_BIG_ENDIAN ? "big" : "little",
+                 format);
+
+        return buf;
+}
 
 #endif
