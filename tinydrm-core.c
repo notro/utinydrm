@@ -136,10 +136,6 @@ bool tinydrm_check_dirty(struct drm_framebuffer *fb,
 	if (!tdev->prepared)
 		return false;
 
-	/* fbdev can flush even when we're not interested */
-	if (tdev->pipe.plane.fb != fb)
-		return false;
-
 	/* Make sure to flush everything the first time */
 	if (!tdev->enabled) {
 		*clips = NULL;

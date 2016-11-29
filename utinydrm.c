@@ -225,8 +225,6 @@ static int utinydrm_fb_dirty(struct utinydrm *udev, struct utinydrm_event_fb_dir
 	struct dma_buf_sync sync_args;
 	struct drm_framebuffer *fb;
 	int i, ret;
-	struct drm_device *drm = utinydrm_to_drm(udev);
-	struct tinydrm_device *tdev = drm_to_tinydrm(drm);
 
 	clock_gettime(CLOCK_MONOTONIC, &ts);
 	printf("[%ld.%09ld] %u: [FB:%u] dirty: num_clips=%u\n", ts.tv_sec, ts.tv_nsec, ev->base.type, dirty->fb_id, dirty->num_clips);
@@ -254,10 +252,6 @@ static int utinydrm_fb_dirty(struct utinydrm *udev, struct utinydrm_event_fb_dir
 	hexdump("utinydrm_fb_dirty", ufb->map, 320 * 2);
 
 	fb = &ufb->fb_cma.fb;
-
-	/* FIXME: drm_simple_display_pipe_funcs.update() must set this */
-	tdev->pipe.plane.fb = fb;
-
 	if (fb && fb->funcs && fb->funcs->dirty)
 		fb->funcs->dirty(fb, NULL, dirty->flags, dirty->color, ev->clips, dirty->num_clips);
 

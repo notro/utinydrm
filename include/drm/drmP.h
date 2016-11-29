@@ -119,7 +119,6 @@ struct drm_crtc {
 };
 
 struct drm_plane {
-	struct drm_framebuffer *fb;
 };
 
 struct drm_encoder {
