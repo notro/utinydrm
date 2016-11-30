@@ -53,6 +53,7 @@ int devm_tinydrm_init(struct device *parent, struct tinydrm_device *tdev,
 
 	tdev->drm.dev = parent;
 	tdev->drm.driver = driver;
+	tdev->drm.primary = &udev->minor;
 	udev->fb_funcs = fb_funcs;
 
 	return 0;

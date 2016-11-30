@@ -213,12 +213,16 @@ static inline struct regmap *devm_regmap_init(struct device *dev,
 static inline int regmap_raw_write(struct regmap *map, unsigned int reg,
 		     const void *val, size_t val_len)
 {
+	DRM_DEBUG("reg=0x%02x, val_len=%zu\n", reg, val_len);
+
 	return 0;
 }
 
 static inline int regmap_raw_read(struct regmap *map, unsigned int reg,
 				  void *val, size_t val_len)
 {
+	DRM_DEBUG("reg=0x%02x, val_len=%zu\n", reg, val_len);
+
 	return 0;
 }
 

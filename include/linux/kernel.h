@@ -154,8 +154,14 @@ struct sg_table {
 };
 
 struct device {
-	void *driver_data;
+	const char      *init_name;
+	void            *driver_data;
 };
+
+static inline const char *dev_name(const struct device *dev)
+{
+	return dev->init_name;
+}
 
 static inline void *dev_get_drvdata(const struct device *dev)
 {

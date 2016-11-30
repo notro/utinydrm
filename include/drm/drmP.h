@@ -99,19 +99,20 @@ struct utinydrm_fb {
 	struct utinydrm_fb *next;
 };
 
+struct drm_minor {
+	int index;
+};
+
 struct utinydrm {
 	int fd;
 	int control_fd;
+	struct drm_minor minor;
 	struct drm_mode_modeinfo mode;
 	const struct drm_framebuffer_funcs *fb_funcs;
 	struct utinydrm_fb *fbs;
 };
 
 
-
-struct drm_minor {
-
-};
 
 struct drm_file {
 
@@ -222,10 +223,10 @@ struct drm_device {
 #endif
 	struct device *dev;		/**< Device structure of bus-device */
 	struct drm_driver *driver;	/**< DRM driver managing the device */
-#if 0
-	void *dev_private;		/**< DRM driver private data */
-	struct drm_minor *control;		/**< Control node */
+//	void *dev_private;		/**< DRM driver private data */
+//	struct drm_minor *control;		/**< Control node */
 	struct drm_minor *primary;		/**< Primary node */
+#if 0
 	struct drm_minor *render;		/**< Render node */
 
 	/* currently active master for this device. Protected by master_mutex */

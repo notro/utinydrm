@@ -19,6 +19,9 @@
 
 #include <drm/tinydrm/tinydrm.h>
 #include <drm/tinydrm/tinydrm-helpers.h>
+#include <drm/tinydrm/mipi-dbi.h>
+#include <linux/gpio/consumer.h>
+#include <linux/spi/spi.h>
 
 int drm_debug = 0xff;
 
@@ -365,20 +368,75 @@ static struct drm_driver udrv = {
 	.name = "mi0283qt",
 };
 
+static int utinydrm_probe(struct spi_device *spi)
+{
+	struct device *dev = &spi->dev;
+	struct tinydrm_device *tdev;
+	struct mipi_dbi *mipi;
+	struct gpio_desc *dc;
+	u32 rotation = 0;
+	bool writeonly = false;
+	int ret;
+
+	mipi = devm_kzalloc(dev, sizeof(*mipi), GFP_KERNEL);
+	if (!mipi)
+		return -ENOMEM;
+
+	mipi->reset = devm_gpiod_get_optional(dev, "reset", GPIOD_OUT_HIGH);
+	if (IS_ERR(mipi->reset)) {
+		dev_err(dev, "Failed to get gpio 'reset'\n");
+		return PTR_ERR(mipi->reset);
+	}
+
+	dc = devm_gpiod_get_optional(dev, "dc", GPIOD_OUT_LOW);
+	if (IS_ERR(dc)) {
+		dev_err(dev, "Failed to get gpio 'dc'\n");
+		return PTR_ERR(dc);
+	}
+
+	mipi->enable_delay_ms = 50;
+
+	mipi->reg = mipi_dbi_spi_init(spi, dc, writeonly);
+	if (IS_ERR(mipi->reg))
+		return PTR_ERR(mipi->reg);
+
+	ret = mipi_dbi_init(dev, mipi, &u_pipe_funcs, &udrv, &utinydrm_mode, rotation);
+	if (ret)
+		return ret;
+
+	tdev = &mipi->tinydrm;
+
+	ret = devm_tinydrm_register(tdev);
+	if (ret)
+		return ret;
+
+	spi_set_drvdata(spi, tdev);
+
+	DRM_DEBUG_DRIVER("Initialized %s:%s @%uMHz on minor %d\n",
+			 tdev->drm.driver->name, dev_name(dev),
+			 spi->max_speed_hz / 1000000,
+			 tdev->drm.primary->index);
+
+	return 0;
+}
+
 int main(int argc, char const *argv[])
 {
-	struct tinydrm_device tdev_stack;
-	struct tinydrm_device *tdev = &tdev_stack;
-	struct device dev;
+	struct tinydrm_device *tdev;
 	struct utinydrm *udev;
 	struct utinydrm_event *ev;
 	int ret;
 	struct pollfd pfd;
-
-	memset(&udev, 0, sizeof(udev));
-	memset(tdev, 0, sizeof(*tdev));
-
-	udev = &tdev->drm.udev;
+	struct spi_device spi_stack = {
+		.dev = {
+			.init_name = "utinydrm_spi0",
+		},
+		.master_instance = {
+			.max_dma_len = (1 << 15), /* 32k */
+		},
+		.max_speed_hz = 32000000,
+	};
+	struct spi_device *spi = &spi_stack;
 
 	ev = malloc(1024);
 	if (!ev) {
@@ -386,15 +444,15 @@ int main(int argc, char const *argv[])
 		return 1;
 	}
 
-	devm_tinydrm_init(&dev, tdev, &u_fb_funcs, &udrv);
-
-	ret = tinydrm_display_pipe_init(tdev, &u_pipe_funcs, 0, NULL, 0, &utinydrm_mode, 0);
-	if (ret)
+	spi_add_device(spi);
+	ret = utinydrm_probe(spi);
+	if (ret) {
+		DRM_ERROR("utinydrm_probe failed %d\n", ret);
 		return 1;
+	}
 
-	ret = devm_tinydrm_register(tdev);
-	if (ret)
-		return 1;
+	tdev = spi_get_drvdata(spi);
+	udev = &tdev->drm.udev;
 
 	pfd.fd = udev->fd;
 	pfd.events = POLLIN;

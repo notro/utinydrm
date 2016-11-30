@@ -1,6 +1,20 @@
 #ifndef __LINUX_GPIO_CONSUMER_H
 #define __LINUX_GPIO_CONSUMER_H
 
+#include <linux/kernel.h>
+
+#define GPIOD_FLAGS_BIT_DIR_SET		BIT(0)
+#define GPIOD_FLAGS_BIT_DIR_OUT		BIT(1)
+#define GPIOD_FLAGS_BIT_DIR_VAL		BIT(2)
+
+enum gpiod_flags {
+	GPIOD_ASIS	= 0,
+	GPIOD_IN	= GPIOD_FLAGS_BIT_DIR_SET,
+	GPIOD_OUT_LOW	= GPIOD_FLAGS_BIT_DIR_SET | GPIOD_FLAGS_BIT_DIR_OUT,
+	GPIOD_OUT_HIGH	= GPIOD_FLAGS_BIT_DIR_SET | GPIOD_FLAGS_BIT_DIR_OUT |
+			  GPIOD_FLAGS_BIT_DIR_VAL,
+};
+
 struct gpio_desc {
 //	struct gpio_device      *gdev;
 //	unsigned long           flags;
@@ -21,8 +35,18 @@ struct gpio_desc {
 //	const char              *name;
 };
 
+static inline struct gpio_desc *
+devm_gpiod_get_optional(struct device *dev, const char *con_id,
+			  enum gpiod_flags flags)
+{
+	DRM_DEBUG("name=%s\n", con_id);
+
+	return NULL;
+}
+
 static inline void gpiod_set_value_cansleep(struct gpio_desc *desc, int value)
 {
+	DRM_DEBUG("value=%d\n", value);
 }
 
 #endif
