@@ -163,59 +163,6 @@ static int utinydrm_fb_destroy(struct utinydrm *udev, struct utinydrm_event_fb_d
 	return 0;
 }
 
-// http://stackoverflow.com/questions/7775991/how-to-get-hexdump-of-a-structure-data
-static void hexdump(char *desc, void *addr, int len) {
-    int i;
-    unsigned char buff[17];
-    unsigned char *pc = (unsigned char*)addr;
-
-    // Output description if given.
-    if (desc != NULL)
-        printf ("%s:\n", desc);
-
-    if (len == 0) {
-        printf("  ZERO LENGTH\n");
-        return;
-    }
-    if (len < 0) {
-        printf("  NEGATIVE LENGTH: %i\n",len);
-        return;
-    }
-
-    // Process every byte in the data.
-    for (i = 0; i < len; i++) {
-        // Multiple of 16 means new line (with line offset).
-
-        if ((i % 16) == 0) {
-            // Just don't print ASCII for the zeroth line.
-            if (i != 0)
-                printf ("  %s\n", buff);
-
-            // Output the offset.
-            printf ("  %04x ", i);
-        }
-
-        // Now the hex code for the specific character.
-        printf (" %02x", pc[i]);
-
-        // And store a printable ASCII character for later.
-        if ((pc[i] < 0x20) || (pc[i] > 0x7e))
-            buff[i % 16] = '.';
-        else
-            buff[i % 16] = pc[i];
-        buff[(i % 16) + 1] = '\0';
-    }
-
-    // Pad out last line if not exactly 16 characters.
-    while ((i % 16) != 0) {
-        printf ("   ");
-        i++;
-    }
-
-    // And print the final ASCII bit.
-    printf ("  %s\n", buff);
-}
-
 static int utinydrm_fb_dirty(struct utinydrm *udev, struct utinydrm_event_fb_dirty *ev)
 {
 	struct drm_mode_fb_dirty_cmd *dirty = &ev->fb_dirty_cmd;
@@ -286,60 +233,6 @@ static int utinydrm_event(struct utinydrm *udev, struct utinydrm_event *ev)
 
 static const struct drm_display_mode utinydrm_mode = {
 	TINYDRM_MODE(320, 240, 58, 43),
-};
-
-static int u_fb_dirty(struct drm_framebuffer *fb,
-			     struct drm_file *file_priv,
-			     unsigned int flags, unsigned int color,
-			     struct drm_clip_rect *clips,
-			     unsigned int num_clips)
-{
-	struct drm_gem_cma_object *cma_obj = drm_fb_cma_get_gem_obj(fb, 0);
-	struct tinydrm_device *tdev = drm_to_tinydrm(fb->dev);
-	struct drm_clip_rect clip;
-	int i, ret = 0;
-
-	DRM_DEBUG("[FB:%u] dirty: num_clips=%u\n", fb->base.id, num_clips);
-
-	for (i = 0; i < num_clips; i++)
-		printf("    clips[%d]: x1=%u, x2=%u, y1=%u, y2=%u\n", i,
-			clips[i].x1, clips[i].x2, clips[i].y1, clips[i].y2);
-
-	mutex_lock(&tdev->dev_lock);
-
-	if (!tinydrm_check_dirty(fb, &clips, &num_clips))
-		goto out_unlock;
-
-	tinydrm_merge_clips(&clip, clips, num_clips, flags,
-			    fb->width, fb->height);
-	clip.x1 = 0;
-	clip.x2 = fb->width;
-
-	DRM_DEBUG("Flushing [FB:%d] x1=%u, x2=%u, y1=%u, y2=%u\n", fb->base.id,
-		  clip.x1, clip.x2, clip.y1, clip.y2);
-
-	DRM_DEBUG("Address: %p\n", cma_obj->vaddr);
-
-	tinydrm_debugfs_dirty_begin(tdev, fb, &clip);
-
-//	hexdump("utinydrm_fb_dirty", cma_obj->vaddr, 320 * 2);
-
-	tinydrm_debugfs_dirty_end(tdev, 0, 16);
-
-	if (ret) {
-		dev_err_once(fb->dev->dev, "Failed to update display %d\n",
-			     ret);
-		goto out_unlock;
-	}
-
-out_unlock:
-	mutex_unlock(&tdev->dev_lock);
-
-	return ret;
-}
-
-static const struct drm_framebuffer_funcs u_fb_funcs = {
-	.dirty = u_fb_dirty,
 };
 
 static void u_pipe_enable(struct drm_simple_display_pipe *pipe,
@@ -433,6 +326,7 @@ int main(int argc, char const *argv[])
 		},
 		.master_instance = {
 			.max_dma_len = (1 << 15), /* 32k */
+			.bits_per_word_mask = SPI_BPW_MASK(8) | SPI_BPW_MASK(16),
 		},
 		.max_speed_hz = 32000000,
 	};

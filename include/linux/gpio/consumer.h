@@ -39,9 +39,15 @@ static inline struct gpio_desc *
 devm_gpiod_get_optional(struct device *dev, const char *con_id,
 			  enum gpiod_flags flags)
 {
+	struct gpio_desc *desc;
+
 	DRM_DEBUG("name=%s\n", con_id);
 
-	return NULL;
+	desc = kzalloc(sizeof(*desc), GFP_KERNEL);
+	if (!desc)
+		return ERR_PTR(-ENOMEM);
+
+	return desc;
 }
 
 static inline void gpiod_set_value_cansleep(struct gpio_desc *desc, int value)

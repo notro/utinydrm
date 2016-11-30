@@ -142,6 +142,7 @@ struct spi_device {
 
 static inline int spi_add_device(struct spi_device *spi)
 {
+	spi->bits_per_word = 8;
 	spi->master = &spi->master_instance;
 
 	return 0;
@@ -218,6 +219,8 @@ struct spi_transfer *xfers, unsigned int num_xfers)
 
 static inline int spi_sync(struct spi_device *spi, struct spi_message *message)
 {
+	DRM_DEBUG("message=%p\n", message);
+
 	return 0;
 }
 

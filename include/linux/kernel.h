@@ -131,6 +131,49 @@ static inline bool is_power_of_2(unsigned long n)
         return (n != 0 && ((n & (n - 1)) == 0));
 }
 
+#define __KERNEL_DIV_ROUND_UP(n, d) (((n) + (d) - 1) / (d))
+#define DIV_ROUND_UP __KERNEL_DIV_ROUND_UP
+
+static __always_inline int fls(int x)
+{
+        int r = 32;
+
+        if (!x)
+                return 0;
+        if (!(x & 0xffff0000u)) {
+                x <<= 16;
+                r -= 16;
+        }
+        if (!(x & 0xff000000u)) {
+                x <<= 8;
+                r -= 8;
+        }
+        if (!(x & 0xf0000000u)) {
+                x <<= 4;
+                r -= 4;
+        }
+        if (!(x & 0xc0000000u)) {
+                x <<= 2;
+                r -= 2;
+        }
+        if (!(x & 0x80000000u)) {
+                x <<= 1;
+                r -= 1;
+        }
+        return r;
+}
+
+static inline __attribute__((const))
+int __ilog2_u32(u32 n)
+{
+	return fls(n) - 1;
+}
+
+#define ilog2(n)				\
+(						\
+	__ilog2_u32(n) 			\
+ )
+
 #define GFP_KERNEL 0
 #define kmalloc_array(num, size, flag)	calloc(num, size)
 #define kmalloc(size, flag)	malloc(size)
