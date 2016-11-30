@@ -1,6 +1,13 @@
 #ifndef __LINUX_REGMAP_H
 #define __LINUX_REGMAP_H
 
+enum regcache_type {
+	REGCACHE_NONE,
+	REGCACHE_RBTREE,
+	REGCACHE_COMPRESSED,
+	REGCACHE_FLAT,
+};
+
 enum regmap_endian {
 	/* Unspecified -> 0 -> Backwards compatible default */
 	REGMAP_ENDIAN_DEFAULT = 0,
@@ -109,8 +116,108 @@ struct regmap {
 #endif
 };
 
+//struct regmap_async;
+
+typedef int (*regmap_hw_write)(void *context, const void *data,
+			       size_t count);
+typedef int (*regmap_hw_gather_write)(void *context,
+				      const void *reg, size_t reg_len,
+				      const void *val, size_t val_len);
+//typedef int (*regmap_hw_async_write)(void *context,
+//				     const void *reg, size_t reg_len,
+//				     const void *val, size_t val_len,
+//				     struct regmap_async *async);
+typedef int (*regmap_hw_read)(void *context,
+			      const void *reg_buf, size_t reg_size,
+			      void *val_buf, size_t val_size);
+//typedef int (*regmap_hw_reg_read)(void *context, unsigned int reg,
+//				  unsigned int *val);
+typedef int (*regmap_hw_reg_write)(void *context, unsigned int reg,
+				   unsigned int val);
+//typedef int (*regmap_hw_reg_update_bits)(void *context, unsigned int reg,
+//					 unsigned int mask, unsigned int val);
+//typedef struct regmap_async *(*regmap_hw_async_alloc)(void);
+//typedef void (*regmap_hw_free_context)(void *context);
+
+struct regmap_bus {
+//	bool fast_io;
+	regmap_hw_write write;
+	regmap_hw_gather_write gather_write;
+//	regmap_hw_async_write async_write;
+	regmap_hw_reg_write reg_write;
+//	regmap_hw_reg_update_bits reg_update_bits;
+	regmap_hw_read read;
+//	regmap_hw_reg_read reg_read;
+//	regmap_hw_free_context free_context;
+//	regmap_hw_async_alloc async_alloc;
+//	u8 read_flag_mask;
+	enum regmap_endian reg_format_endian_default;
+	enum regmap_endian val_format_endian_default;
+//	size_t max_raw_read;
+//	size_t max_raw_write;
+};
+
+struct regmap_config {
+//	const char *name;
+
+	int reg_bits;
+//	int reg_stride;
+//	int pad_bits;
+	int val_bits;
+
+//	bool (*writeable_reg)(struct device *dev, unsigned int reg);
+//	bool (*readable_reg)(struct device *dev, unsigned int reg);
+//	bool (*volatile_reg)(struct device *dev, unsigned int reg);
+//	bool (*precious_reg)(struct device *dev, unsigned int reg);
+//	regmap_lock lock;
+//	regmap_unlock unlock;
+//	void *lock_arg;
+
+//	int (*reg_read)(void *context, unsigned int reg, unsigned int *val);
+//	int (*reg_write)(void *context, unsigned int reg, unsigned int val);
+
+//	bool fast_io;
+
+//	unsigned int max_register;
+//	const struct regmap_access_table *wr_table;
+//	const struct regmap_access_table *rd_table;
+//	const struct regmap_access_table *volatile_table;
+//	const struct regmap_access_table *precious_table;
+//	const struct reg_default *reg_defaults;
+//	unsigned int num_reg_defaults;
+	enum regcache_type cache_type;
+//	const void *reg_defaults_raw;
+//	unsigned int num_reg_defaults_raw;
+
+//	unsigned long read_flag_mask;
+//	unsigned long write_flag_mask;
+
+//	bool use_single_rw;
+//	bool can_multi_write;
+
+//	enum regmap_endian reg_format_endian;
+//	enum regmap_endian val_format_endian;
+
+//	const struct regmap_range_cfg *ranges;
+//	unsigned int num_ranges;
+};
+
+static inline struct regmap *devm_regmap_init(struct device *dev,
+				  const struct regmap_bus *bus,
+				  void *bus_context,
+				  const struct regmap_config *config)
+{
+	return NULL;
+}
+
 static inline int regmap_raw_write(struct regmap *map, unsigned int reg,
 		     const void *val, size_t val_len)
+{
+	return 0;
+}
+
+static inline int regmap_raw_read(struct regmap *map, unsigned int reg,
+				  void *val, size_t val_len)
 {
 	return 0;
 }

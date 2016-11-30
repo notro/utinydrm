@@ -5,6 +5,9 @@
 #include <stdlib.h>
 #include <errno.h>
 
+// usleep
+#include <unistd.h>
+
 #define container_of(ptr, type, member) ({                      \
         const typeof( ((type *)0)->member ) *__mptr = (ptr);    \
         (type *)( (char *)__mptr - offsetof(type,member) );})
@@ -14,6 +17,14 @@
 #define EXPORT_SYMBOL_GPL(_mod)
 
 #define IS_ENABLED(x)	1
+
+#define WARN_ON_ONCE(x) (x)
+
+#define unlikely(x) (x)
+
+#define ENOTSUPP        524     /* Operation is not supported */
+
+#define __must_check            __attribute__((warn_unused_result))
 
 #include <stdbool.h>
 
@@ -44,6 +55,14 @@
         type __min2 = (y);                      \
         __min1 < __min2 ? __min1: __min2; })
 
+#define max_t(type, x, y) ({                    \
+        type __max1 = (x);                      \
+        type __max2 = (y);                      \
+        __max1 > __max2 ? __max1: __max2; })
+
+#define clamp_t(type, val, lo, hi) min_t(type, max_t(type, val, lo), hi)
+#define clamp_val(val, lo, hi) clamp_t(typeof(val), val, lo, hi)
+
 #define swap(a, b) \
         do { typeof(a) __tmp = (a); (a) = (b); (b) = __tmp; } while (0)
 
@@ -51,6 +70,18 @@
         (((__u16)(x) & (__u16)0x00ffU) << 8) |                  \
         (((__u16)(x) & (__u16)0xff00U) >> 8)))
 #define swab16 ___constant_swab16
+
+#define ___constant_swab64(x) ((__u64)(                         \
+        (((__u64)(x) & (__u64)0x00000000000000ffULL) << 56) |   \
+        (((__u64)(x) & (__u64)0x000000000000ff00ULL) << 40) |   \
+        (((__u64)(x) & (__u64)0x0000000000ff0000ULL) << 24) |   \
+        (((__u64)(x) & (__u64)0x00000000ff000000ULL) <<  8) |   \
+        (((__u64)(x) & (__u64)0x000000ff00000000ULL) >>  8) |   \
+        (((__u64)(x) & (__u64)0x0000ff0000000000ULL) >> 24) |   \
+        (((__u64)(x) & (__u64)0x00ff000000000000ULL) >> 40) |   \
+        (((__u64)(x) & (__u64)0xff00000000000000ULL) >> 56)))
+
+#define cpu_to_be64 ___constant_swab64
 
 static inline u16 __get_unaligned_le16(const u8 *p)
 {
@@ -102,7 +133,11 @@ static inline bool is_power_of_2(unsigned long n)
 
 #define GFP_KERNEL 0
 #define kmalloc_array(num, size, flag)	calloc(num, size)
+#define kmalloc(size, flag)	malloc(size)
+#define kzalloc(size, flag)	calloc(1, size)
 #define kfree(x) free(x)
+#define devm_kmalloc(dev, size, flag)	malloc(size)
+#define devm_kzalloc(dev, size, flag)	calloc(1, size)
 
 struct vm_area_struct {
 
@@ -168,5 +203,27 @@ do {                                                                    \
         dev_level_once(dev_err, dev, fmt, ##__VA_ARGS__)
 
 #define dev_warn_once dev_err_once
+
+#define msleep(x) usleep(x * 1000)
+
+
+#define MAX_ERRNO       4095
+
+#define IS_ERR_VALUE(x) unlikely((unsigned long)(void *)(x) >= (unsigned long)-MAX_ERRNO)
+
+static inline void * ERR_PTR(long error)
+{
+	return (void *) error;
+}
+
+static inline long __must_check PTR_ERR(__force const void *ptr)
+{
+	return (long) ptr;
+}
+
+static inline bool __must_check IS_ERR(__force const void *ptr)
+{
+	return IS_ERR_VALUE((unsigned long)ptr);
+}
 
 #endif

@@ -38,6 +38,8 @@ struct spi_device {
 #endif
 };
 
+struct spi_transfer;
+
 struct spi_master {
 //	struct device	dev;
 
@@ -193,6 +195,17 @@ static inline void
 spi_message_add_tail(struct spi_transfer *t, struct spi_message *m)
 {
 	list_add_tail(&t->transfer_list, &m->transfers);
+}
+
+static inline void
+spi_message_init_with_transfers(struct spi_message *m,
+struct spi_transfer *xfers, unsigned int num_xfers)
+{
+	unsigned int i;
+
+	spi_message_init(m);
+	for (i = 0; i < num_xfers; ++i)
+		spi_message_add_tail(&xfers[i], m);
 }
 
 static inline int spi_sync(struct spi_device *spi, struct spi_message *message)

@@ -192,9 +192,23 @@ struct dma_buf_attachment {
 
 };
 
-
-
-
+struct drm_mode_config {
+//	int num_fb;
+//	int num_connector;
+//	int num_encoder;
+//	int num_overlay_plane;
+//	int num_total_plane;
+//	int num_crtc;
+	int min_width, min_height;
+	int max_width, max_height;
+//	const struct drm_mode_config_funcs *funcs;
+//	resource_size_t fb_base;
+	uint32_t preferred_depth; //, prefer_shadow;
+//	bool async_page_flip;
+//	bool allow_fb_modifiers;
+//	uint32_t cursor_width, cursor_height;
+//	struct drm_mode_config_helper_funcs *helper_private;
+};
 
 struct drm_device {
 	struct utinydrm udev;
@@ -306,9 +320,9 @@ struct drm_device {
 
 	struct drm_local_map *agp_buffer_map;
 	unsigned int agp_buffer_token;
-
+#endif
 	struct drm_mode_config mode_config;	/**< Current mode config */
-
+#if 0
 	/** \name GEM information */
 	/*@{ */
 	struct mutex object_name_lock;
@@ -558,6 +572,13 @@ static inline const char *drm_get_format_name(uint32_t format)
                  format);
 
         return buf;
+}
+
+#define drm_fb_cma_destroy		NULL
+#define drm_fb_cma_create_handle	NULL
+
+static inline void drm_mode_config_reset(struct drm_device *dev)
+{
 }
 
 #endif
