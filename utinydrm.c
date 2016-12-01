@@ -239,17 +239,23 @@ static void u_pipe_enable(struct drm_simple_display_pipe *pipe,
 			  struct drm_crtc_state *crtc_state)
 {
 	struct tinydrm_device *tdev = pipe_to_tinydrm(pipe);
+	struct mipi_dbi *mipi = mipi_dbi_from_tinydrm(tdev);
+	struct gpio_desc *led = (struct gpio_desc *)mipi->backlight;
 
 	DRM_DEBUG("Pipe enable\n");
 	tdev->prepared = true;
+	gpiod_set_value_cansleep(led, 1);
 }
 
 static void u_pipe_disable(struct drm_simple_display_pipe *pipe)
 {
 	struct tinydrm_device *tdev = pipe_to_tinydrm(pipe);
+	struct mipi_dbi *mipi = mipi_dbi_from_tinydrm(tdev);
+	struct gpio_desc *led = (struct gpio_desc *)mipi->backlight;
 
 	DRM_DEBUG("Pipe disable\n");
 	tdev->prepared = false;
+	gpiod_set_value_cansleep(led, 0);
 }
 
 static const struct drm_simple_display_pipe_funcs u_pipe_funcs = {
@@ -270,6 +276,7 @@ static int utinydrm_probe(struct spi_device *spi)
 	u32 rotation = 0;
 	bool writeonly = false;
 	int ret;
+	struct gpio_desc *led;
 
 	mipi = devm_kzalloc(dev, sizeof(*mipi), GFP_KERNEL);
 	if (!mipi)
@@ -309,6 +316,14 @@ static int utinydrm_probe(struct spi_device *spi)
 			 tdev->drm.driver->name, dev_name(dev),
 			 spi->max_speed_hz / 1000000,
 			 tdev->drm.primary->index);
+
+	led = devm_gpiod_get_optional(&spi->dev, "led", GPIOD_OUT_HIGH);
+	if (IS_ERR(led)) {
+		DRM_ERROR("Failed to get led gpio %ld\n", PTR_ERR(led));
+		return PTR_ERR(led);
+	}
+
+	mipi->backlight = (struct backlight_device *)led;
 
 	return 0;
 }
