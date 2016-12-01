@@ -140,6 +140,26 @@ struct spi_device {
 #endif
 };
 
+struct spi_driver {
+	const struct spi_device_id *id_table;
+	int			(*probe)(struct spi_device *spi);
+//	int			(*remove)(struct spi_device *spi);
+	void			(*shutdown)(struct spi_device *spi);
+	struct device_driver	driver;
+};
+
+#define SPI_NAME_SIZE   32
+
+struct spi_device_id {
+	char name[SPI_NAME_SIZE];
+	//kernel_ulong_t driver_data;
+	unsigned long driver_data;
+};
+
+extern struct spi_driver *driver;
+
+#define module_spi_driver(sdrv) struct spi_driver *driver = &sdrv
+
 static inline int spi_add_device(struct spi_device *spi)
 {
 	spi->bits_per_word = 8;

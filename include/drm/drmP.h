@@ -21,6 +21,12 @@
 
 extern int drm_debug;
 
+#define DRIVER_GEM			0x1000
+#define DRIVER_MODESET			0x2000
+#define DRIVER_PRIME			0x4000
+#define DRIVER_RENDER			0x8000
+#define DRIVER_ATOMIC			0x10000
+
 struct drm_framebuffer;
 struct drm_file;
 
@@ -119,7 +125,7 @@ struct drm_file {
 };
 
 struct drm_plane_state {
-
+	struct drm_framebuffer *fb;
 };
 
 struct drm_crtc_state {
@@ -131,6 +137,8 @@ struct drm_crtc {
 };
 
 struct drm_plane {
+	struct drm_plane_state state_instance;
+	struct drm_plane_state *state;
 };
 
 struct drm_encoder {

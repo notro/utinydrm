@@ -166,6 +166,8 @@ static int utinydrm_fb_destroy(struct utinydrm *udev, struct utinydrm_event_fb_d
 static int utinydrm_fb_dirty(struct utinydrm *udev, struct utinydrm_event_fb_dirty *ev)
 {
 	struct drm_mode_fb_dirty_cmd *dirty = &ev->fb_dirty_cmd;
+	struct drm_device *drm = utinydrm_to_drm(udev);
+	struct tinydrm_device *tdev = drm_to_tinydrm(drm);
 	struct dma_buf_sync sync_args;
 	struct drm_framebuffer *fb;
 	struct utinydrm_fb *ufb;
@@ -185,6 +187,7 @@ static int utinydrm_fb_dirty(struct utinydrm *udev, struct utinydrm_event_fb_dir
 		perror("Failed to DMA_BUF_SYNC_START");
 
 	fb = &ufb->fb_cma.fb;
+	tdev->pipe.plane.state->fb = fb;
 	if (fb && fb->funcs && fb->funcs->dirty)
 		fb->funcs->dirty(fb, NULL, dirty->flags, dirty->color, ev->clips, dirty->num_clips);
 
@@ -231,103 +234,6 @@ static int utinydrm_event(struct utinydrm *udev, struct utinydrm_event *ev)
 
 /*********************************************************************************************************************************/
 
-static const struct drm_display_mode utinydrm_mode = {
-	TINYDRM_MODE(320, 240, 58, 43),
-};
-
-static void u_pipe_enable(struct drm_simple_display_pipe *pipe,
-			  struct drm_crtc_state *crtc_state)
-{
-	struct tinydrm_device *tdev = pipe_to_tinydrm(pipe);
-	struct mipi_dbi *mipi = mipi_dbi_from_tinydrm(tdev);
-	struct gpio_desc *led = (struct gpio_desc *)mipi->backlight;
-
-	DRM_DEBUG("Pipe enable\n");
-	tdev->prepared = true;
-	gpiod_set_value_cansleep(led, 1);
-}
-
-static void u_pipe_disable(struct drm_simple_display_pipe *pipe)
-{
-	struct tinydrm_device *tdev = pipe_to_tinydrm(pipe);
-	struct mipi_dbi *mipi = mipi_dbi_from_tinydrm(tdev);
-	struct gpio_desc *led = (struct gpio_desc *)mipi->backlight;
-
-	DRM_DEBUG("Pipe disable\n");
-	tdev->prepared = false;
-	gpiod_set_value_cansleep(led, 0);
-}
-
-static const struct drm_simple_display_pipe_funcs u_pipe_funcs = {
-	.enable = u_pipe_enable,
-	.disable = u_pipe_disable,
-};
-
-static struct drm_driver udrv = {
-	.name = "mi0283qt",
-};
-
-static int utinydrm_probe(struct spi_device *spi)
-{
-	struct device *dev = &spi->dev;
-	struct tinydrm_device *tdev;
-	struct mipi_dbi *mipi;
-	struct gpio_desc *dc;
-	u32 rotation = 0;
-	bool writeonly = false;
-	int ret;
-	struct gpio_desc *led;
-
-	mipi = devm_kzalloc(dev, sizeof(*mipi), GFP_KERNEL);
-	if (!mipi)
-		return -ENOMEM;
-
-	mipi->reset = devm_gpiod_get_optional(dev, "reset", GPIOD_OUT_HIGH);
-	if (IS_ERR(mipi->reset)) {
-		dev_err(dev, "Failed to get gpio 'reset'\n");
-		return PTR_ERR(mipi->reset);
-	}
-
-	dc = devm_gpiod_get_optional(dev, "dc", GPIOD_OUT_LOW);
-	if (IS_ERR(dc)) {
-		dev_err(dev, "Failed to get gpio 'dc'\n");
-		return PTR_ERR(dc);
-	}
-
-	mipi->enable_delay_ms = 50;
-
-	mipi->reg = mipi_dbi_spi_init(spi, dc, writeonly);
-	if (IS_ERR(mipi->reg))
-		return PTR_ERR(mipi->reg);
-
-	ret = mipi_dbi_init(dev, mipi, &u_pipe_funcs, &udrv, &utinydrm_mode, rotation);
-	if (ret)
-		return ret;
-
-	tdev = &mipi->tinydrm;
-
-	ret = devm_tinydrm_register(tdev);
-	if (ret)
-		return ret;
-
-	spi_set_drvdata(spi, tdev);
-
-	DRM_DEBUG_DRIVER("Initialized %s:%s @%uMHz on minor %d\n",
-			 tdev->drm.driver->name, dev_name(dev),
-			 spi->max_speed_hz / 1000000,
-			 tdev->drm.primary->index);
-
-	led = devm_gpiod_get_optional(&spi->dev, "led", GPIOD_OUT_HIGH);
-	if (IS_ERR(led)) {
-		DRM_ERROR("Failed to get led gpio %ld\n", PTR_ERR(led));
-		return PTR_ERR(led);
-	}
-
-	mipi->backlight = (struct backlight_device *)led;
-
-	return 0;
-}
-
 int main(int argc, char const *argv[])
 {
 	struct tinydrm_device *tdev;
@@ -337,7 +243,7 @@ int main(int argc, char const *argv[])
 	struct pollfd pfd;
 	struct spi_device spi_stack = {
 		.dev = {
-			.init_name = "utinydrm_spi0",
+			.init_name = "spi0.0",
 		},
 		.master_instance = {
 			.max_dma_len = (1 << 15), /* 32k */
@@ -354,9 +260,10 @@ int main(int argc, char const *argv[])
 	}
 
 	spi_add_device(spi);
-	ret = utinydrm_probe(spi);
+
+	ret = driver->probe(spi);
 	if (ret) {
-		DRM_ERROR("utinydrm_probe failed %d\n", ret);
+		DRM_ERROR("driver probe failed %d\n", ret);
 		return 1;
 	}
 

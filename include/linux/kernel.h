@@ -12,6 +12,9 @@
         const typeof( ((type *)0)->member ) *__mptr = (ptr);    \
         (type *)( (char *)__mptr - offsetof(type,member) );})
 
+#define MODULE_DEVICE_TABLE(type, name)
+#define MODULE_AUTHOR(desc)
+#define MODULE_DESCRIPTION(desc)
 #define MODULE_LICENSE(_license)
 #define EXPORT_SYMBOL(_mod)
 #define EXPORT_SYMBOL_GPL(_mod)
@@ -199,11 +202,19 @@ struct sg_table {
 struct device {
 	const char      *init_name;
 	void            *driver_data;
+	u64		coherent_dma_mask;
 };
 
 static inline const char *dev_name(const struct device *dev)
 {
 	return dev->init_name;
+}
+
+#define DMA_BIT_MASK(n) (((n) == 64) ? ~0ULL : ((1ULL<<(n))-1))
+
+static inline int dma_coerce_mask_and_coherent(struct device *dev, u64 mask)
+{
+	return 0;
 }
 
 static inline void *dev_get_drvdata(const struct device *dev)
@@ -214,6 +225,50 @@ static inline void *dev_get_drvdata(const struct device *dev)
 static inline void dev_set_drvdata(struct device *dev, void *data)
 {
         dev->driver_data = data;
+}
+
+struct of_device_id {
+//	char    name[32];
+//	char    type[32];
+	char    compatible[128];
+//	const void *data;
+};
+
+struct device_driver {
+	const char		*name;
+//	struct bus_type		*bus;
+
+	struct module		*owner;
+//	const char		*mod_name;	/* used for built-in modules */
+
+//	bool suppress_bind_attrs;	/* disables bind/unbind via sysfs */
+//	enum probe_type probe_type;
+
+	const struct of_device_id	*of_match_table;
+//	const struct acpi_device_id	*acpi_match_table;
+
+//	int (*probe) (struct device *dev);
+//	int (*remove) (struct device *dev);
+//	void (*shutdown) (struct device *dev);
+//	int (*suspend) (struct device *dev, pm_message_t state);
+//	int (*resume) (struct device *dev);
+//	const struct attribute_group **groups;
+
+	const struct dev_pm_ops *pm;
+
+//	struct driver_private *p;
+};
+
+static inline bool device_property_read_bool(struct device *dev,
+                                             const char *propname)
+{
+	return false;
+}
+
+static inline int device_property_read_u32(struct device *dev,
+                                           const char *propname, u32 *val)
+{
+	return 0;
 }
 
 struct file_operations {
@@ -231,12 +286,25 @@ struct mutex {
 #define mutex_lock(lock)
 #define mutex_unlock(lock)
 
+struct work_struct {
+
+};
+
+static inline void schedule_work(struct work_struct *work)
+{
+}
+
+#define THIS_MODULE	NULL
 
 #define pr_debug printf
+
+#define dev_dbg(dev, fmt, ...)		\
+        pr_debug(fmt, ##__VA_ARGS__)
 
 static inline void dev_err(const struct device *dev, const char *fmt, ...)
 {}
 
+#define dev_warn dev_err
 
 #define dev_level_once(dev_level, dev, fmt, ...)                        \
 do {                                                                    \

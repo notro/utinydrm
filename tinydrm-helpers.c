@@ -13,6 +13,7 @@
 //#include <linux/backlight.h>
 //#include <linux/pm.h>
 #include <linux/spi/spi.h>
+#include <linux/gpio/consumer.h>
 
 /**
  * tinydrm_merge_clips - merge clip rectangles
@@ -89,7 +90,15 @@ void tinydrm_xrgb8888_to_rgb565(u32 *src, u16 *dst, unsigned int num_pixels)
 
 struct backlight_device *tinydrm_of_find_backlight(struct device *dev)
 {
-	return NULL;
+	struct gpio_desc *led;
+
+	led = devm_gpiod_get_optional(dev, "led", GPIOD_OUT_HIGH);
+	if (IS_ERR(led)) {
+		DRM_ERROR("Failed to get led gpio %ld\n", PTR_ERR(led));
+		return ERR_PTR(PTR_ERR(led));
+	}
+
+	return (struct backlight_device *)led;
 }
 
 /**
@@ -101,6 +110,9 @@ struct backlight_device *tinydrm_of_find_backlight(struct device *dev)
  */
 int tinydrm_enable_backlight(struct backlight_device *backlight)
 {
+	if (backlight)
+		gpiod_set_value_cansleep((struct gpio_desc *)backlight, 1);
+
 	return 0;
 }
 
@@ -113,6 +125,8 @@ int tinydrm_enable_backlight(struct backlight_device *backlight)
  */
 void tinydrm_disable_backlight(struct backlight_device *backlight)
 {
+	if (backlight)
+		gpiod_set_value_cansleep((struct gpio_desc *)backlight, 0);
 }
 
 /*

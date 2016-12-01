@@ -21,7 +21,7 @@ struct tinydrm_debugfs_dirty;
 struct tinydrm_device {
 	struct drm_device drm;
 	struct drm_simple_display_pipe pipe;
-//	struct work_struct dirty_work;
+	struct work_struct dirty_work;
 	struct mutex dev_lock;
 	bool prepared;
 	bool enabled;
@@ -47,20 +47,6 @@ pipe_to_tinydrm(struct drm_simple_display_pipe *pipe)
 }
 
 #define TINYDRM_GEM_DRIVER_OPS \
-	.gem_free_object	= tinydrm_gem_cma_free_object, \
-	.gem_vm_ops		= &drm_gem_cma_vm_ops, \
-	.prime_handle_to_fd	= drm_gem_prime_handle_to_fd, \
-	.prime_fd_to_handle	= drm_gem_prime_fd_to_handle, \
-	.gem_prime_import	= drm_gem_prime_import, \
-	.gem_prime_export	= drm_gem_prime_export, \
-	.gem_prime_get_sg_table	= drm_gem_cma_prime_get_sg_table, \
-	.gem_prime_import_sg_table = tinydrm_gem_cma_prime_import_sg_table, \
-	.gem_prime_vmap		= drm_gem_cma_prime_vmap, \
-	.gem_prime_vunmap	= drm_gem_cma_prime_vunmap, \
-	.gem_prime_mmap		= drm_gem_cma_prime_mmap, \
-	.dumb_create		= drm_gem_cma_dumb_create, \
-	.dumb_map_offset	= drm_gem_cma_dumb_map_offset, \
-	.dumb_destroy		= drm_gem_dumb_destroy, \
 	.fops			= &tinydrm_fops
 
 #define TINYDRM_MODE(hd, vd, hd_mm, vd_mm) \

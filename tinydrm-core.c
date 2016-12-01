@@ -55,6 +55,7 @@ int devm_tinydrm_init(struct device *parent, struct tinydrm_device *tdev,
 	tdev->drm.driver = driver;
 	tdev->drm.primary = &udev->minor;
 	udev->fb_funcs = fb_funcs;
+	tdev->pipe.plane.state = &tdev->pipe.plane.state_instance;
 
 	return 0;
 }
@@ -147,6 +148,11 @@ bool tinydrm_check_dirty(struct drm_framebuffer *fb,
 }
 
 /* tinydrm-pipe.c */
+
+void tinydrm_display_pipe_update(struct drm_simple_display_pipe *pipe,
+				 struct drm_plane_state *old_state)
+{
+}
 
 static int tinydrm_rotate_mode(struct drm_display_mode *mode,
 			       unsigned int rotation)
