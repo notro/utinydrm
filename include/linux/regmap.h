@@ -353,18 +353,73 @@ static inline int regmap_raw_write(struct regmap *map, unsigned int reg,
 	return ret;
 }
 
+static int _regmap_raw_read(struct regmap *map, unsigned int reg, void *val,
+			    unsigned int val_len)
+{
+	int ret;
+
+	if (!map->bus || !map->bus->read)
+		return -EINVAL;
+
+	map->format.format_reg(map->work_buf, reg, map->reg_shift);
+	regmap_set_work_buf_flag_mask(map, map->format.reg_bytes,
+				      map->read_flag_mask);
+
+	ret = map->bus->read(map->bus_context, map->work_buf,
+			     map->format.reg_bytes + map->format.pad_bytes,
+			     val, val_len);
+
+	return ret;
+}
+
 static inline int regmap_raw_read(struct regmap *map, unsigned int reg,
 				  void *val, size_t val_len)
 {
+	size_t val_bytes = map->format.val_bytes;
+	size_t val_count = val_len / val_bytes;
+	int ret;
+
 	DRM_DEBUG("reg=0x%02x, val_len=%zu\n", reg, val_len);
 
-	return 0;
+	if (!map->bus)
+		return -EINVAL;
+	if (val_len % map->format.val_bytes)
+		return -EINVAL;
+	if (!IS_ALIGNED(reg, map->reg_stride))
+		return -EINVAL;
+	if (val_count == 0)
+		return -EINVAL;
+
+		if (!map->bus->read) {
+			ret = -ENOTSUPP;
+			goto out;
+		}
+		if (map->max_raw_read && map->max_raw_read < val_len) {
+			ret = -E2BIG;
+			goto out;
+		}
+
+		/* Physical block read if there's no cache involved */
+		ret = _regmap_raw_read(map, reg, val, val_len);
+
+out:
+	return ret;
 }
 
 static inline int _regmap_bus_read(void *context, unsigned int reg,
 			    unsigned int *val)
 {
-	return -EINVAL;
+	int ret;
+	struct regmap *map = context;
+
+	if (!map->format.parse_val)
+		return -EINVAL;
+
+	ret = _regmap_raw_read(map, reg, map->work_buf, map->format.val_bytes);
+	if (ret == 0)
+		*val = map->format.parse_val(map->work_buf);
+
+	return ret;
 }
 
 static inline void regmap_format_8(void *buf, unsigned int val, unsigned int shift)

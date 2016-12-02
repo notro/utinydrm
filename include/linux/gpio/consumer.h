@@ -48,6 +48,18 @@ struct gpio_desc {
 	const char              *name;
 };
 
+static inline void gpiod_set_value_cansleep(struct gpio_desc *desc, int value)
+{
+	char buf[2];
+
+	DRM_DEBUG("gpio=%d, value=%d\n", desc->gpio, value);
+
+	snprintf(buf, sizeof(buf), "%d", value ? 1 : 0);
+	if (write(desc->fd, buf, strlen(buf)) == -1)
+		printf("%s(%d, %d): Failed to write gpio: %s\n",
+		       __func__, desc->gpio, value, strerror(errno));
+}
+
 static inline int file_write_string(const char *pathname, const char *buf)
 {
 	int fd, ret;
@@ -119,19 +131,12 @@ devm_gpiod_get_optional(struct device *dev, const char *con_id,
 		return ERR_PTR(-errno);
 	}
 
+	if (flags == GPIOD_OUT_HIGH)
+		gpiod_set_value_cansleep(desc, 1);
+	else if (flags == GPIOD_OUT_LOW)
+		gpiod_set_value_cansleep(desc, 0);
+
 	return desc;
-}
-
-static inline void gpiod_set_value_cansleep(struct gpio_desc *desc, int value)
-{
-	char buf[2];
-
-	DRM_DEBUG("gpio=%d, value=%d\n", desc->gpio, value);
-
-	snprintf(buf, sizeof(buf), "%d", value ? 1 : 0);
-	if (write(desc->fd, buf, strlen(buf)) == -1)
-		printf("%s(%d, %d): Failed to write gpio: %s\n",
-		       __func__, desc->gpio, value, strerror(errno));
 }
 
 #endif

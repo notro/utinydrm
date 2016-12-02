@@ -3,6 +3,10 @@
 
 #include <linux/kernel.h>
 
+// memset
+#include <string.h>
+
+struct spi_device;
 struct spi_transfer;
 
 struct spi_master {
@@ -237,12 +241,7 @@ struct spi_transfer *xfers, unsigned int num_xfers)
 		spi_message_add_tail(&xfers[i], m);
 }
 
-static inline int spi_sync(struct spi_device *spi, struct spi_message *message)
-{
-	DRM_DEBUG("message=%p\n", message);
-
-	return 0;
-}
+int spi_sync(struct spi_device *spi, struct spi_message *message);
 
 static inline void spi_set_drvdata(struct spi_device *spi, void *data)
 {

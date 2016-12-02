@@ -92,7 +92,7 @@ struct backlight_device *tinydrm_of_find_backlight(struct device *dev)
 {
 	struct gpio_desc *led;
 
-	led = devm_gpiod_get_optional(dev, "led", GPIOD_OUT_HIGH);
+	led = devm_gpiod_get_optional(dev, "led", GPIOD_OUT_LOW);
 	if (IS_ERR(led)) {
 		DRM_ERROR("Failed to get led gpio %ld\n", PTR_ERR(led));
 		return ERR_PTR(PTR_ERR(led));

@@ -1,12 +1,15 @@
 #ifndef _LINUX_KERNEL_H
 #define _LINUX_KERNEL_H
 
+#include <stdint.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <errno.h>
 
 // usleep
 #include <unistd.h>
+
+#include <linux/types.h>
 
 #define container_of(ptr, type, member) ({                      \
         const typeof( ((type *)0)->member ) *__mptr = (ptr);    \
@@ -136,6 +139,8 @@ static inline bool is_power_of_2(unsigned long n)
 
 #define __KERNEL_DIV_ROUND_UP(n, d) (((n) + (d) - 1) / (d))
 #define DIV_ROUND_UP __KERNEL_DIV_ROUND_UP
+
+#define IS_ALIGNED(x, a)                (((x) & ((typeof(x))(a) - 1)) == 0)
 
 static __always_inline int fls(int x)
 {

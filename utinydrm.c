@@ -246,7 +246,8 @@ int main(int argc, char const *argv[])
 			.init_name = "spi0.0",
 		},
 		.master_instance = {
-			.max_dma_len = (1 << 15), /* 32k */
+			//.max_dma_len = (1 << 15), /* 32k */
+			.max_dma_len = 4096,
 			.bits_per_word_mask = SPI_BPW_MASK(8) | SPI_BPW_MASK(16),
 		},
 		.max_speed_hz = 32000000,
