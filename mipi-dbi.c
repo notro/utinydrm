@@ -392,6 +392,11 @@ static int mipi_dbi_spi3_gather_write(void *context, const void *reg,
 	if (reg_len != 1)
 		return -EINVAL;
 
+if (!mspi->tx_buf)
+	mspi->tx_buf = utinydrm_get_tx_buf(&spi->dev, mspi->chunk_size);
+if (!mspi->tx_buf)
+	return -ENOMEM;
+
 	val_width = (*(u8 *)reg == mspi->ram_reg) ? 16 : 8;
 	TINYDRM_DEBUG_REG_WRITE(reg, reg_len, val, val_len, val_width);
 
@@ -538,9 +543,9 @@ struct regmap *mipi_dbi_spi_init(struct spi_device *spi, struct gpio_desc *dc,
 
 	if (tinydrm_get_machine_endian() == REGMAP_ENDIAN_LITTLE &&
 	    dc && !tinydrm_spi_bpw_supported(spi, 16)) {
-		mspi->tx_buf = devm_kmalloc(dev, mspi->chunk_size, GFP_KERNEL);
-		if (!mspi->tx_buf)
-			return ERR_PTR(-ENOMEM);
+		//mspi->tx_buf = devm_kmalloc(dev, mspi->chunk_size, GFP_KERNEL);
+		//if (!mspi->tx_buf)
+		//	return ERR_PTR(-ENOMEM);
 	}
 
 	if (dc)
@@ -576,6 +581,7 @@ static int mipi_dbi_fb_dirty(struct drm_framebuffer *fb,
 			    fb->width, fb->height);
 	clip.x1 = 0;
 	clip.x2 = fb->width;
+//clip.y2 = clip.y1 + 30;
 
 	DRM_DEBUG("Flushing [FB:%d] x1=%u, x2=%u, y1=%u, y2=%u\n", fb->base.id,
 		  clip.x1, clip.x2, clip.y1, clip.y2);

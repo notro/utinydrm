@@ -457,15 +457,6 @@ struct drm_driver {
 
 
 
-#define KERN_EMERG      ""    /* system is unusable */
-#define KERN_ALERT      "1"    /* action must be taken immediately */
-#define KERN_CRIT       "2"    /* critical conditions */
-#define KERN_ERR        "3"    /* error conditions */
-#define KERN_WARNING    "4"    /* warning conditions */
-#define KERN_NOTICE     "5"    /* normal but significant condition */
-#define KERN_INFO       "6"    /* informational */
-#define KERN_DEBUG      "7"    /* debug-level messages */
-
 #define DRM_UT_NONE		0x00
 #define DRM_UT_CORE 		0x01
 #define DRM_UT_DRIVER		0x02
@@ -476,11 +467,8 @@ struct drm_driver {
 
 #define drm_printk(level, category, fmt, ...)				\
 ({									\
-	struct timespec __ts;						\
-									\
-	clock_gettime(CLOCK_MONOTONIC, &__ts);				\
 	if (!(category != DRM_UT_NONE && !(drm_debug & category)))	\
-		printf("[%ld.%09ld] [utinydrm:%s] " fmt, __ts.tv_sec, __ts.tv_nsec, __func__, ##__VA_ARGS__);	\
+		printk(level, "[utinydrm:%s] " fmt, __func__, ##__VA_ARGS__);	\
 })
 
 #define DRM_DEBUG_KMS(fmt, ...)					\

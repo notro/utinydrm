@@ -99,7 +99,7 @@ int devm_tinydrm_register(struct tinydrm_device *tdev)
 	}
 
 	snprintf(ctrl_fname, sizeof(ctrl_fname), "/dev/dri/controlD%d", udev_create.index + 64);
-	printf("DRM index: %d, ctrl_fname=%s\n", udev_create.index, ctrl_fname);
+	DRM_DEBUG("DRM index: %d, ctrl_fname=%s\n", udev_create.index, ctrl_fname);
 
 	udev->control_fd = open(ctrl_fname, O_RDWR);
 	if (udev->control_fd == -1) {
@@ -107,6 +107,8 @@ int devm_tinydrm_register(struct tinydrm_device *tdev)
 		close(udev->fd);
 		return -errno;
 	}
+
+	drm->dev->utinydrm = udev;
 
 	return 0;
 }

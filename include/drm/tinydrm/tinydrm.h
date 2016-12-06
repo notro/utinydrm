@@ -121,4 +121,24 @@ static inline void tinydrm_debugfs_dirty_end(struct tinydrm_device *tdev, size_t
 #define tinydrm_debugfs_init	NULL
 #define tinydrm_debugfs_cleanup	NULL
 
+struct bo
+{
+	int fd;
+	void *ptr;
+	size_t size;
+	size_t offset;
+	size_t pitch;
+	unsigned handle;
+};
+
+struct udmabuf {
+	struct bo *bo;
+	int fd;
+	void *map;
+	size_t map_size;
+};
+
+extern struct udmabuf *tx_buf;
+void *utinydrm_get_tx_buf(struct device *dev, size_t len);
+
 #endif /* __LINUX_TINYDRM_H */

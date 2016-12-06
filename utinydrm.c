@@ -23,12 +23,124 @@
 #include <linux/gpio/consumer.h>
 #include <linux/spi/spi.h>
 
-int drm_debug = 0xff;
+int drm_debug = 0;//xff;
+int printk_level = KERN_WARNING;
 
 static inline struct drm_device *
 utinydrm_to_drm(struct utinydrm *udev)
 {
 	return container_of(udev, struct drm_device, udev);
+}
+
+
+static struct bo *
+bo_create_dumb(int fd, unsigned int width, unsigned int height, unsigned int bpp)
+{
+	struct drm_mode_create_dumb arg;
+	struct bo *bo;
+	int ret;
+
+	bo = calloc(1, sizeof(*bo));
+	if (bo == NULL) {
+		fprintf(stderr, "failed to allocate buffer object\n");
+		return NULL;
+	}
+
+	memset(&arg, 0, sizeof(arg));
+	arg.bpp = bpp;
+	arg.width = width;
+	arg.height = height;
+
+	ret = ioctl(fd, DRM_IOCTL_MODE_CREATE_DUMB, &arg);
+	if (ret) {
+		fprintf(stderr, "failed to create dumb buffer: %s\n",
+			strerror(errno));
+		free(bo);
+		return NULL;
+	}
+
+	bo->fd = fd;
+	bo->handle = arg.handle;
+	bo->size = arg.size;
+	bo->pitch = arg.pitch;
+
+	return bo;
+}
+
+static struct udmabuf *utinydrm_create_dmabuf(int control_fd, unsigned int width, unsigned int height, unsigned int bpp)
+{
+	struct drm_prime_handle prime;
+	struct udmabuf *udma;
+	int ret;
+
+	DRM_DEBUG("create dmabuf: %ux%u, bpp=%u\n", width, height, bpp);
+
+	udma = calloc(1, sizeof(*udma));
+	if (!udma)
+		return ERR_PTR(-ENOMEM);
+
+	udma->bo = bo_create_dumb(control_fd, width, height, bpp);
+	if (!udma->bo) {
+		ret = -ENOMEM;
+		goto error;
+	}
+
+	DRM_DEBUG("create dmabuf: %ux%u, handle=%u\n", width, height, udma->bo->handle);
+
+	memset(&prime, 0, sizeof(struct drm_prime_handle));
+	prime.handle = udma->bo->handle;
+	prime.flags = O_RDWR;
+	ret = ioctl(control_fd, DRM_IOCTL_UTINYDRM_PRIME_HANDLE_TO_FD, &prime);
+	if (ret == -1) {
+		perror("Failed to get FD from prime handle");
+		ret = -errno;
+		goto error;
+	}
+	DRM_DEBUG("Prime Handle: %x to FD: %d\n", prime.handle, prime.fd);
+	udma->fd = prime.fd;
+
+	udma->map_size = udma->bo->size;
+
+	udma->map = mmap(NULL, udma->map_size, PROT_READ | PROT_WRITE, MAP_SHARED, prime.fd, 0);
+	//udma->map = mmap(NULL, udma->map_size, PROT_READ, MAP_SHARED, prime.fd, 0);
+	if (udma->map == MAP_FAILED) {
+		perror("Failed to mmap");
+		ret = -errno;
+		goto error;
+	}
+
+
+	return udma;
+
+error:
+	free(udma);
+
+	return ERR_PTR(ret);
+}
+
+struct udmabuf *tx_buf = NULL;
+
+void *utinydrm_get_tx_buf(struct device *dev, size_t len)
+{
+	struct utinydrm *udev = dev->utinydrm;
+	size_t width = 320, height = 240, bpp = 16;
+
+	DRM_DEBUG("%s: udev=%p\n", __func__, udev);
+	if (!udev)
+		return NULL;
+
+	if (len > width * height * bpp / 8)
+		return NULL;
+
+	tx_buf = utinydrm_create_dmabuf(udev->control_fd, width, height, bpp);
+	if (IS_ERR(tx_buf)) {
+		printf("failed to create dmabuf %ld\n", PTR_ERR(tx_buf));
+		return NULL;
+	}
+
+	DRM_DEBUG("%s: return %p\n\n", __func__, tx_buf->map);
+
+	return tx_buf->map;
 }
 
 static int utinydrm_pipe_enable(struct utinydrm *udev, struct utinydrm_event *ev)
@@ -168,10 +280,10 @@ static int utinydrm_fb_dirty(struct utinydrm *udev, struct utinydrm_event_fb_dir
 	struct drm_mode_fb_dirty_cmd *dirty = &ev->fb_dirty_cmd;
 	struct drm_device *drm = utinydrm_to_drm(udev);
 	struct tinydrm_device *tdev = drm_to_tinydrm(drm);
-	struct dma_buf_sync sync_args;
+	//struct dma_buf_sync sync_args;
 	struct drm_framebuffer *fb;
 	struct utinydrm_fb *ufb;
-	int ret;
+	//int ret;
 
 	for (ufb = udev->fbs; ufb != NULL; ufb = ufb->next) {
 		if (ufb->id == ev->fb_dirty_cmd.fb_id)
@@ -181,20 +293,31 @@ static int utinydrm_fb_dirty(struct utinydrm *udev, struct utinydrm_event_fb_dir
 	if (!ufb)
 		return 0;
 
-	sync_args.flags = DMA_BUF_SYNC_START | DMA_BUF_SYNC_READ;
-	ret = ioctl(ufb->buf_fd, DMA_BUF_IOCTL_SYNC, &sync_args);
-	if (ret == -1)
-		perror("Failed to DMA_BUF_SYNC_START");
+	//sync_args.flags = DMA_BUF_SYNC_START | DMA_BUF_SYNC_READ;
+	//ret = ioctl(ufb->buf_fd, DMA_BUF_IOCTL_SYNC, &sync_args);
+	//if (ret == -1)
+	//	perror("Failed to DMA_BUF_SYNC_START");
+
+//	if (tx_buf) {
+//		struct dma_buf_sync sync_args = {
+//			.flags = DMA_BUF_SYNC_START | DMA_BUF_SYNC_WRITE,
+//		};
+//		int ret;
+//
+//		ret = ioctl(tx_buf->fd, DMA_BUF_IOCTL_SYNC, &sync_args);
+//		if (ret == -1)
+//			perror("Failed to DMA_BUF_SYNC_START");
+//	}
 
 	fb = &ufb->fb_cma.fb;
 	tdev->pipe.plane.state->fb = fb;
 	if (fb && fb->funcs && fb->funcs->dirty)
 		fb->funcs->dirty(fb, NULL, dirty->flags, dirty->color, ev->clips, dirty->num_clips);
 
-	sync_args.flags = DMA_BUF_SYNC_END | DMA_BUF_SYNC_READ;
-	ret = ioctl(ufb->buf_fd, DMA_BUF_IOCTL_SYNC, &sync_args);
-	if (ret == -1)
-		perror("Failed to DMA_BUF_SYNC_END");
+	//sync_args.flags = DMA_BUF_SYNC_END | DMA_BUF_SYNC_READ;
+	//ret = ioctl(ufb->buf_fd, DMA_BUF_IOCTL_SYNC, &sync_args);
+	//if (ret == -1)
+	//	perror("Failed to DMA_BUF_SYNC_END");
 
 	return 0;
 }
@@ -223,7 +346,7 @@ static int utinydrm_event(struct utinydrm *udev, struct utinydrm_event *ev)
 		break;
 	default:
 		printf("Unknown event: %u\n", ev->type);
-		ret = 0;
+		ret = 0; // -ENOSYS
 		break;
 	}
 
@@ -247,8 +370,9 @@ int main(int argc, char const *argv[])
 		},
 		.master_instance = {
 			//.max_dma_len = (1 << 15), /* 32k */
-			.max_dma_len = 4096,
-			.bits_per_word_mask = SPI_BPW_MASK(8) | SPI_BPW_MASK(16),
+			//.max_dma_len = 4096,
+			.max_dma_len = 320 * 240 * 2 / 5, // 30720
+			.bits_per_word_mask = SPI_BPW_MASK(8), // | SPI_BPW_MASK(16),
 		},
 		.max_speed_hz = 32000000,
 	};
@@ -262,7 +386,7 @@ int main(int argc, char const *argv[])
 
 	spi_add_device(spi);
 
-	ret = driver->probe(spi);
+	ret = udriver->probe(spi);
 	if (ret) {
 		DRM_ERROR("driver probe failed %d\n", ret);
 		return 1;

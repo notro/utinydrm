@@ -160,9 +160,9 @@ struct spi_device_id {
 	unsigned long driver_data;
 };
 
-extern struct spi_driver *driver;
+extern struct spi_driver *udriver;
 
-#define module_spi_driver(sdrv) struct spi_driver *driver = &sdrv
+#define module_spi_driver(sdrv) struct spi_driver *udriver = &sdrv
 
 static inline int spi_add_device(struct spi_device *spi)
 {
