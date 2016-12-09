@@ -77,21 +77,21 @@ int devm_tinydrm_register(struct tinydrm_device *tdev)
 {
 	struct drm_device *drm = &tdev->drm;
 	struct utinydrm *udev = &drm->udev;
-	struct utinydrm_dev_create udev_create;
+	struct udrm_dev_create udev_create;
 	char ctrl_fname[PATH_MAX];
 	int ret;
 
 	memset(&udev_create, 0, sizeof(udev_create));
 	udev_create.mode = udev->mode;
-	strncpy(udev_create.name, drm->driver->name, UTINYDRM_MAX_NAME_SIZE);
+	strncpy(udev_create.name, drm->driver->name, UDRM_MAX_NAME_SIZE);
 
-	udev->fd = open("/dev/utinydrm", O_RDWR);
+	udev->fd = open("/dev/udrm", O_RDWR);
 	if (udev->fd == -1) {
-		perror("Failed to open /dev/utinydrm");
+		perror("Failed to open /dev/udrm");
 		return -errno;
 	}
 
-	ret = ioctl(udev->fd, UTINYDRM_DEV_CREATE, &udev_create);
+	ret = ioctl(udev->fd, UDRM_DEV_CREATE, &udev_create);
 	if (ret == -1) {
 		perror("Failed to create device");
 		close(udev->fd);

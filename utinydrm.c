@@ -23,8 +23,8 @@
 #include <linux/gpio/consumer.h>
 #include <linux/spi/spi.h>
 
-int drm_debug = 0;//xff;
-int printk_level = KERN_WARNING;
+int drm_debug = 0; //xff;
+int printk_level = KERN_INFO; //KERN_WARNING;
 
 static inline struct drm_device *
 utinydrm_to_drm(struct utinydrm *udev)
@@ -90,7 +90,7 @@ static struct udmabuf *utinydrm_create_dmabuf(int control_fd, unsigned int width
 	memset(&prime, 0, sizeof(struct drm_prime_handle));
 	prime.handle = udma->bo->handle;
 	prime.flags = O_RDWR;
-	ret = ioctl(control_fd, DRM_IOCTL_UTINYDRM_PRIME_HANDLE_TO_FD, &prime);
+	ret = ioctl(control_fd, DRM_IOCTL_UDRM_PRIME_HANDLE_TO_FD, &prime);
 	if (ret == -1) {
 		perror("Failed to get FD from prime handle");
 		ret = -errno;
@@ -143,7 +143,7 @@ void *utinydrm_get_tx_buf(struct device *dev, size_t len)
 	return tx_buf->map;
 }
 
-static int utinydrm_pipe_enable(struct utinydrm *udev, struct utinydrm_event *ev)
+static int utinydrm_pipe_enable(struct utinydrm *udev, struct udrm_event *ev)
 {
 	struct drm_device *drm = utinydrm_to_drm(udev);
 	struct tinydrm_device *tdev = drm_to_tinydrm(drm);
@@ -154,7 +154,7 @@ static int utinydrm_pipe_enable(struct utinydrm *udev, struct utinydrm_event *ev
 	return 0;
 }
 
-static int utinydrm_pipe_disable(struct utinydrm *udev, struct utinydrm_event *ev)
+static int utinydrm_pipe_disable(struct utinydrm *udev, struct udrm_event *ev)
 {
 	struct drm_device *drm = utinydrm_to_drm(udev);
 	struct tinydrm_device *tdev = drm_to_tinydrm(drm);
@@ -165,20 +165,16 @@ static int utinydrm_pipe_disable(struct utinydrm *udev, struct utinydrm_event *e
 	return 0;
 }
 
-static int utinydrm_fb_create(struct utinydrm *udev, struct utinydrm_event_fb_create *ev)
+static int utinydrm_fb_create(struct utinydrm *udev, struct udrm_event_fb *ev)
 {
 	struct drm_device *drm = utinydrm_to_drm(udev);
-	struct drm_mode_fb_cmd2 *mfb = &ev->fb;
-
 	struct drm_mode_fb_cmd info = {
-		.fb_id = mfb->fb_id,
+		.fb_id = ev->fb_id,
 	};
 	int ret;
 	struct drm_prime_handle prime;
 	struct utinydrm_fb *ufb;
 	struct drm_framebuffer *fb;
-
-	DRM_DEBUG("[FB:%u] create: %ux%u, handles[0]=%u\n", mfb->fb_id, mfb->width, mfb->height, mfb->handles[0]);
 
 	ufb = calloc(1, sizeof(*ufb));
 	if (!ufb)
@@ -189,7 +185,7 @@ static int utinydrm_fb_create(struct utinydrm *udev, struct utinydrm_event_fb_cr
 
 	ret = ioctl(udev->control_fd, DRM_IOCTL_MODE_GETFB, &info);
 	if (ret == -1) {
-		perror("Failed to get fb");
+		printf("%s: Failed to get fb %u: %s", __func__, ev->fb_id, strerror(errno));
 		ret = -errno;
 		goto error;
 	}
@@ -199,7 +195,7 @@ static int utinydrm_fb_create(struct utinydrm *udev, struct utinydrm_event_fb_cr
 
 	memset(&prime, 0, sizeof(struct drm_prime_handle));
 	prime.handle = info.handle;
-	ret = ioctl(udev->control_fd, DRM_IOCTL_UTINYDRM_PRIME_HANDLE_TO_FD, &prime);
+	ret = ioctl(udev->control_fd, DRM_IOCTL_UDRM_PRIME_HANDLE_TO_FD, &prime);
 	if (ret == -1) {
 		perror("Failed to get FD from prime handle");
 		ret = -errno;
@@ -244,7 +240,7 @@ error:
 	return ret;
 }
 
-static int utinydrm_fb_destroy(struct utinydrm *udev, struct utinydrm_event_fb_destroy *ev)
+static int utinydrm_fb_destroy(struct utinydrm *udev, struct udrm_event_fb *ev)
 {
 	struct utinydrm_fb **prev, **curr, *ufb = NULL;
 	int ret;
@@ -275,7 +271,34 @@ static int utinydrm_fb_destroy(struct utinydrm *udev, struct utinydrm_event_fb_d
 	return 0;
 }
 
-static int utinydrm_fb_dirty(struct utinydrm *udev, struct utinydrm_event_fb_dirty *ev)
+u8 val123;
+
+static void utinydrm_buf_test_read(struct utinydrm *udev, struct utinydrm_fb *ufb)
+{
+	int i;
+	volatile u8 *val = &val123;
+	u8 *map = ufb->map;
+
+	for (i = 0; i < 320 *240 * 2; i++)
+		*val = map[i];
+}
+
+static void utinydrm_buf_test_write(struct utinydrm *udev, struct utinydrm_fb *ufb)
+{
+	u8 *src = ufb->map;
+	u8 *dst;
+	int i;
+
+	if (!tx_buf)
+		return;
+
+	dst = tx_buf->map;
+
+	for (i = 0; i < 320 *240 * 2; i++)
+		dst[i] = src[i];
+}
+
+static int utinydrm_fb_dirty(struct utinydrm *udev, struct udrm_event_fb_dirty *ev)
 {
 	struct drm_mode_fb_dirty_cmd *dirty = &ev->fb_dirty_cmd;
 	struct drm_device *drm = utinydrm_to_drm(udev);
@@ -292,6 +315,9 @@ static int utinydrm_fb_dirty(struct utinydrm *udev, struct utinydrm_event_fb_dir
 
 	if (!ufb)
 		return 0;
+
+	//utinydrm_buf_test_read(udev, ufb);
+	//utinydrm_buf_test_write(udev, ufb);
 
 	//sync_args.flags = DMA_BUF_SYNC_START | DMA_BUF_SYNC_READ;
 	//ret = ioctl(ufb->buf_fd, DMA_BUF_IOCTL_SYNC, &sync_args);
@@ -322,27 +348,27 @@ static int utinydrm_fb_dirty(struct utinydrm *udev, struct utinydrm_event_fb_dir
 	return 0;
 }
 
-static int utinydrm_event(struct utinydrm *udev, struct utinydrm_event *ev)
+static int utinydrm_event(struct utinydrm *udev, struct udrm_event *ev)
 {
 	int ret;
 
-	usleep(100000);
+//	usleep(100000);
 
 	switch (ev->type) {
-	case UTINYDRM_EVENT_PIPE_ENABLE:
+	case UDRM_EVENT_PIPE_ENABLE:
 		ret = utinydrm_pipe_enable(udev, ev);
 		break;
-	case UTINYDRM_EVENT_PIPE_DISABLE:
+	case UDRM_EVENT_PIPE_DISABLE:
 		ret = utinydrm_pipe_disable(udev, ev);
 		break;
-	case UTINYDRM_EVENT_FB_CREATE:
-		ret = utinydrm_fb_create(udev, (struct utinydrm_event_fb_create *)ev);
+	case UDRM_EVENT_FB_CREATE:
+		ret = utinydrm_fb_create(udev, (struct udrm_event_fb *)ev);
 		break;
-	case UTINYDRM_EVENT_FB_DESTROY:
-		ret = utinydrm_fb_destroy(udev, (struct utinydrm_event_fb_destroy *)ev);
+	case UDRM_EVENT_FB_DESTROY:
+		ret = utinydrm_fb_destroy(udev, (struct udrm_event_fb *)ev);
 		break;
-	case UTINYDRM_EVENT_FB_DIRTY:
-		ret = utinydrm_fb_dirty(udev, (struct utinydrm_event_fb_dirty *)ev);
+	case UDRM_EVENT_FB_DIRTY:
+		ret = utinydrm_fb_dirty(udev, (struct udrm_event_fb_dirty *)ev);
 		break;
 	default:
 		printf("Unknown event: %u\n", ev->type);
@@ -350,7 +376,7 @@ static int utinydrm_event(struct utinydrm *udev, struct utinydrm_event *ev)
 		break;
 	}
 
-	usleep(100000);
+//	usleep(100000);
 
 	return ret;
 }
@@ -361,7 +387,7 @@ int main(int argc, char const *argv[])
 {
 	struct tinydrm_device *tdev;
 	struct utinydrm *udev;
-	struct utinydrm_event *ev;
+	struct udrm_event *ev;
 	int ret;
 	struct pollfd pfd;
 	struct spi_device spi_stack = {
@@ -372,7 +398,7 @@ int main(int argc, char const *argv[])
 			//.max_dma_len = (1 << 15), /* 32k */
 			//.max_dma_len = 4096,
 			.max_dma_len = 320 * 240 * 2 / 5, // 30720
-			.bits_per_word_mask = SPI_BPW_MASK(8), // | SPI_BPW_MASK(16),
+			.bits_per_word_mask = SPI_BPW_MASK(8) | SPI_BPW_MASK(16),
 		},
 		.max_speed_hz = 32000000,
 	};
@@ -404,7 +430,7 @@ int main(int argc, char const *argv[])
 
 		ret = read(udev->fd, ev, 1024);
 		if (ret == -1) {
-			perror("Failed to read from /dev/utinydrm");
+			perror("Failed to read from /dev/udrm");
 			tinydrm_unregister(tdev);
 			return 1;
 		}
@@ -413,7 +439,7 @@ int main(int argc, char const *argv[])
 
 		ret = write(udev->fd, &event_ret, sizeof(int));
 		if (ret == -1) {
-			perror("Failed to write to /dev/utinydrm");
+			perror("Failed to write to /dev/udrm");
 			tinydrm_unregister(tdev);
 			return 1;
 		}

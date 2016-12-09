@@ -14,7 +14,8 @@
 //#include <drm/drm_gem_cma_helper.h>
 #include <drm/drm_simple_kms_helper.h>
 
-#include "../../../../tinydrm/include/uapi/drm/utinydrm.h"
+//#include "../../../../tinydrm/include/uapi/drm/utinydrm.h"
+#include "../../../../udrm-kernel/include/uapi/drm/udrm.h"
 
 struct tinydrm_debugfs_dirty;
 

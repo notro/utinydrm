@@ -43,9 +43,12 @@ int spi_sync(struct spi_device *spi, struct spi_message *m)
 		DRM_DEBUG("[FB:%u] ufb->map=%p, tr->tx_buf=%p\n", ufb->id, ufb->map, tr->tx_buf);
 		utr[0].tx_buf = 0;
 		utr[0].tx_dma_fd = ufb->buf_fd;
+
+		if (utr[0].len > 10000)
+			utr[0].len = 30720;
 	}
 
-	if (tx_buf) {
+	if (0 && tx_buf) {
 //		struct dma_buf_sync sync_args = {
 //			.flags = DMA_BUF_SYNC_END | DMA_BUF_SYNC_WRITE, // DMA_BUF_SYNC_RW -> DMA_BIDIRECTIONAL
 //		};
