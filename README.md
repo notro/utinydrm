@@ -1,1 +1,1 @@
-A hack to test /dev/utinydrm
+A hack to test /dev/udrm

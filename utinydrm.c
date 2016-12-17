@@ -271,6 +271,14 @@ static int utinydrm_fb_destroy(struct utinydrm *udev, struct udrm_event_fb *ev)
 	return 0;
 }
 
+static u64 clock_only_nsec(void)
+{
+	struct timespec ts;
+
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return ts.tv_nsec;
+}
+
 u8 val123;
 
 static void utinydrm_buf_test_read(struct utinydrm *udev, struct utinydrm_fb *ufb)
@@ -278,9 +286,16 @@ static void utinydrm_buf_test_read(struct utinydrm *udev, struct utinydrm_fb *uf
 	int i;
 	volatile u8 *val = &val123;
 	u8 *map = ufb->map;
+	u64 start, end;
+
+	start = clock_only_nsec();
 
 	for (i = 0; i < 320 *240 * 2; i++)
 		*val = map[i];
+
+	end = clock_only_nsec();
+
+	printf("%s: %3llums\n", __func__, (end - start) / 1000000);
 }
 
 static void utinydrm_buf_test_write(struct utinydrm *udev, struct utinydrm_fb *ufb)
@@ -397,7 +412,8 @@ int main(int argc, char const *argv[])
 		.master_instance = {
 			//.max_dma_len = (1 << 15), /* 32k */
 			//.max_dma_len = 4096,
-			.max_dma_len = 320 * 240 * 2 / 5, // 30720
+			//.max_dma_len = 320 * 240 * 2 / 5, // 30720
+			.max_dma_len = 320 * 240 * 2,
 			.bits_per_word_mask = SPI_BPW_MASK(8) | SPI_BPW_MASK(16),
 		},
 		.max_speed_hz = 32000000,

@@ -83,6 +83,7 @@ int devm_tinydrm_register(struct tinydrm_device *tdev)
 
 	memset(&udev_create, 0, sizeof(udev_create));
 	udev_create.mode = udev->mode;
+	udev_create.buf_mode = UDRM_BUF_MODE_SWAP_BYTES;
 	strncpy(udev_create.name, drm->driver->name, UDRM_MAX_NAME_SIZE);
 
 	udev->fd = open("/dev/udrm", O_RDWR);
@@ -109,6 +110,9 @@ int devm_tinydrm_register(struct tinydrm_device *tdev)
 	}
 
 	drm->dev->utinydrm = udev;
+
+	udev->buf_fd = udev_create.buf_fd;
+	DRM_DEBUG_KMS("buf_fd=%d\n", udev_create.buf_fd);
 
 	return 0;
 }

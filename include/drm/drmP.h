@@ -116,6 +116,7 @@ struct utinydrm {
 	struct drm_mode_modeinfo mode;
 	const struct drm_framebuffer_funcs *fb_funcs;
 	struct utinydrm_fb *fbs;
+	int buf_fd;
 };
 
 

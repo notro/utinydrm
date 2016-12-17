@@ -139,21 +139,6 @@ int tinydrm_regmap_flush_rgb565(struct regmap *reg, u32 regnr,
 	u16 *tr, *buf = NULL;
 	int ret;
 
-	/*
-	 * TODO: Add support for all widths (requires a buffer copy)
-	 *
-	 * Crude X windows usage numbers for a 320x240 (76.8k pixel) display,
-	 * possible improvements:
-	 * - 80-90% cut for <2k pixel transfers
-	 * - 40-50% cut for <50k pixel tranfers
-	 */
-	if (width != fb->width) {
-		dev_err(fb->dev->dev,
-			"Only full width clip are supported: x1=%u, x2=%u\n",
-			clip->x1, clip->x2);
-		return -EINVAL;
-	}
-
 	switch (fb->pixel_format) {
 	case DRM_FORMAT_RGB565:
 		vmem += clip->y1 * width * 2;

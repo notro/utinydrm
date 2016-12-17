@@ -1,4 +1,10 @@
 /*
+Changes:
+	Lift width restriction on dirty rectangles
+
+*/
+
+/*
  * MIPI Display Bus Interface (DBI) LCD controller support
  *
  * Copyright 2016 Noralf Trønnes
@@ -579,9 +585,6 @@ static int mipi_dbi_fb_dirty(struct drm_framebuffer *fb,
 
 	tinydrm_merge_clips(&clip, clips, num_clips, flags,
 			    fb->width, fb->height);
-	clip.x1 = 0;
-	clip.x2 = fb->width;
-//clip.y2 = clip.y1 + 30;
 
 	DRM_DEBUG("Flushing [FB:%d] x1=%u, x2=%u, y1=%u, y2=%u\n", fb->base.id,
 		  clip.x1, clip.x2, clip.y1, clip.y2);

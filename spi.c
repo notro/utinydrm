@@ -11,6 +11,59 @@
 #include <sys/ioctl.h>
 #include <linux/spi/spidev.h>
 
+static int spi_ioc_message(struct spi_ioc_transfer *utr, unsigned int num)
+{
+	int fd, ret;
+
+	fd = open("/dev/spidev0.0", O_RDWR);
+	if (fd < 0) {
+		DRM_ERROR("Failed to open spidev\n");
+		return -errno;
+	}
+
+	ret = ioctl(fd, SPI_IOC_MESSAGE(num), utr);
+	if (ret < 1) {
+		printf("%s: Failed to ioctl spidev: %s", __func__, strerror(errno));
+		ret = -errno;
+	}
+
+	close(fd);
+
+	return ret < 0 ? ret : 0;
+}
+
+static int spi_buf_transfer(struct spi_transfer *tr, int buf_fd)
+{
+	struct spi_ioc_transfer utr = {
+		.tx_dma_fd = buf_fd,
+		.speed_hz = tr->speed_hz,
+		//.bits_per_word = tr->bits_per_word,
+		.bits_per_word = 8,
+	};
+	size_t chunk, max_chunk = 320 * 240 * 2 / 5; // 30720
+	size_t len = tr->len;
+	u32 offset = 0;
+	int ret;
+
+	DRM_DEBUG("%s: buf_fd=%d, tr->len=%u\n", __func__, buf_fd, tr->len);
+
+	while (len) {
+		chunk = min(len, max_chunk);
+
+		utr.dma_offset = offset;
+		utr.len = chunk;
+
+		offset += chunk;
+		len -= chunk;
+
+		ret = spi_ioc_message(&utr, 1);
+		if (ret)
+			return ret;
+	}
+
+	return 0;
+}
+
 int spi_sync(struct spi_device *spi, struct spi_message *m)
 {
 	struct spi_transfer *tr = list_first_entry(&m->transfers, struct spi_transfer, transfer_list);
@@ -39,16 +92,19 @@ int spi_sync(struct spi_device *spi, struct spi_message *m)
 			break;
 	}
 
-	if (ufb) {
+	if (ufb && udev->buf_fd >= 0) {
+		if (!tr->speed_hz)
+			tr->speed_hz = spi->max_speed_hz;
+
+		return spi_buf_transfer(tr, udev->buf_fd);
+
+	} else if (ufb) {
 		DRM_DEBUG("[FB:%u] ufb->map=%p, tr->tx_buf=%p\n", ufb->id, ufb->map, tr->tx_buf);
 		utr[0].tx_buf = 0;
 		utr[0].tx_dma_fd = ufb->buf_fd;
+		utr[0].dma_offset = (u32)(tr->tx_buf - ufb->map);
 
-		if (utr[0].len > 10000)
-			utr[0].len = 30720;
-	}
-
-	if (0 && tx_buf) {
+	} else if (tx_buf) {
 //		struct dma_buf_sync sync_args = {
 //			.flags = DMA_BUF_SYNC_END | DMA_BUF_SYNC_WRITE, // DMA_BUF_SYNC_RW -> DMA_BIDIRECTIONAL
 //		};
@@ -61,6 +117,7 @@ int spi_sync(struct spi_device *spi, struct spi_message *m)
 			DRM_DEBUG("%s: tx_buf->map=%p, tx_buf->map_size=%zu\n", __func__, tx_buf->map, tx_buf->map_size);
 			utr[0].tx_buf = 0;
 			utr[0].tx_dma_fd = tx_buf->fd;
+			utr[0].dma_offset = (u32)(tr->tx_buf - tx_buf->map);
 		}
 	}
 
