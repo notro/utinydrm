@@ -73,6 +73,10 @@ void tinydrm_unregister(struct tinydrm_device *tdev)
 	close(udev->fd);
 }
 
+static const uint32_t udrm_formats[] = {
+	DRM_FORMAT_RGB565,
+};
+
 int devm_tinydrm_register(struct tinydrm_device *tdev)
 {
 	struct drm_device *drm = &tdev->drm;
@@ -83,6 +87,8 @@ int devm_tinydrm_register(struct tinydrm_device *tdev)
 
 	memset(&udev_create, 0, sizeof(udev_create));
 	udev_create.mode = udev->mode;
+	udev_create.formats = (unsigned long)&udrm_formats;
+	udev_create.num_formats = 1;
 	udev_create.buf_mode = UDRM_BUF_MODE_SWAP_BYTES;
 	strncpy(udev_create.name, drm->driver->name, UDRM_MAX_NAME_SIZE);
 
